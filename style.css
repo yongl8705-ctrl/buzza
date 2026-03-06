@@ -1,1 +1,126 @@
-/* Add styles here */
+:root {
+    --bg: #eef3f8;
+    --text: #1f2a37;
+    --muted: #5e6b7a;
+    --panel: #ffffff;
+    --panel-border: #d9e3ee;
+    --focus: #1477e6;
+    --focus-dark: #0f58ac;
+}
+
+* {
+    box-sizing: border-box;
+}
+
+body {
+    margin: 0;
+    font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+    color: var(--text);
+    background:
+        radial-gradient(1200px 450px at 50% -200px, #d9e9fb 0%, transparent 70%),
+        var(--bg);
+}
+
+.page {
+    min-height: 100vh;
+    padding: 32px 16px;
+}
+
+.container {
+    max-width: 980px;
+    margin: 0 auto;
+    padding: 24px;
+    background: var(--panel);
+    border: 1px solid var(--panel-border);
+    border-radius: 14px;
+    box-shadow: 0 12px 30px rgba(20, 53, 88, 0.08);
+}
+
+h1 {
+    margin: 0;
+    text-align: center;
+}
+
+.subtitle {
+    margin: 8px 0 24px;
+    text-align: center;
+    color: var(--muted);
+}
+
+.input-container {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    gap: 10px;
+}
+
+#stock-ticker-input {
+    width: 100%;
+    padding: 12px 14px;
+    border: 1px solid #bfd1e2;
+    border-radius: 10px;
+    font-size: 1rem;
+    letter-spacing: 0.02em;
+}
+
+#stock-ticker-input:focus {
+    outline: 3px solid rgba(20, 119, 230, 0.2);
+    border-color: var(--focus);
+}
+
+#add-stock-btn {
+    border: 0;
+    border-radius: 10px;
+    padding: 0 18px;
+    background: var(--focus);
+    color: #fff;
+    font-weight: 600;
+    cursor: pointer;
+}
+
+#add-stock-btn:hover {
+    background: var(--focus-dark);
+}
+
+.form-message {
+    min-height: 1.4em;
+    margin: 10px 2px 0;
+    color: #9e2f2f;
+    font-size: 0.95rem;
+}
+
+.stock-list {
+    margin-top: 16px;
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+    gap: 12px;
+}
+
+stock-card {
+    display: block;
+}
+
+.sr-only {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+}
+
+@media (max-width: 640px) {
+    .container {
+        padding: 18px;
+    }
+
+    .input-container {
+        grid-template-columns: 1fr;
+    }
+
+    #add-stock-btn {
+        height: 44px;
+    }
+}

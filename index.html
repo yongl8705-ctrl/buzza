@@ -1,14 +1,33 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Hello World</title>
-  <link href='/style.css' rel='stylesheet'>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Stock Tracker</title>
+    <link rel="stylesheet" href="style.css">
 </head>
 <body>
-  <h1>Hello, world!</h1>
-  <button onclick="console.log('hello');">Press me</button>
-  <script defer type="text/javascript" src="/main.js"></script>
+    <main class="page">
+        <div class="container">
+            <h1>My Stock Portfolio</h1>
+            <p class="subtitle">Track your watchlist quickly with ticker symbols.</p>
+
+            <form id="add-stock-form" class="input-container">
+                <label class="sr-only" for="stock-ticker-input">Stock ticker</label>
+                <input
+                    type="text"
+                    id="stock-ticker-input"
+                    maxlength="8"
+                    autocomplete="off"
+                    placeholder="Enter stock ticker (e.g., AAPL)"
+                >
+                <button id="add-stock-btn" type="submit">Add Stock</button>
+            </form>
+
+            <p id="form-message" class="form-message" aria-live="polite"></p>
+            <div id="stock-list" class="stock-list"></div>
+        </div>
+    </main>
+    <script src="main.js"></script>
 </body>
 </html>
