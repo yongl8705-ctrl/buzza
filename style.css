@@ -223,6 +223,52 @@ label {
 .risk-title {
     font-size: 0.9rem;
     color: var(--muted);
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.help-wrap {
+    position: relative;
+    display: inline-flex;
+}
+
+.help-dot {
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    border: 1px solid var(--line);
+    background: var(--card);
+    color: var(--text);
+    font-size: 11px;
+    line-height: 1;
+    padding: 0;
+}
+
+.help-pop {
+    position: absolute;
+    left: 22px;
+    top: -4px;
+    width: 220px;
+    border: 1px solid var(--line);
+    background: var(--bg-soft);
+    color: var(--text);
+    border-radius: 8px;
+    padding: 7px 9px;
+    font-size: 0.76rem;
+    line-height: 1.4;
+    opacity: 0;
+    pointer-events: none;
+    transform: translateY(4px);
+    transition: opacity 0.14s ease, transform 0.14s ease;
+    z-index: 4;
+}
+
+.help-wrap:hover .help-pop,
+.help-wrap:focus-within .help-pop,
+.help-wrap:active .help-pop {
+    opacity: 1;
+    transform: translateY(0);
 }
 
 .risk-value {
@@ -245,6 +291,7 @@ label {
     border-radius: 7px;
     font-size: 0.78rem;
     padding: 4px 6px;
+    pointer-events: none;
 }
 
 .chart-tip.hidden {

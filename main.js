@@ -9,17 +9,15 @@ const knownStocks = {
 const defaultTickers = ["AAPL", "TSLA", "QQQ", "SPY", "MSFT"];
 
 const indicatorDefs = [
-    { label: "VIX", mode: "single", ticker: "VXX", unit: "", threshold: 30, riskOnHigh: true },
-    { label: "장단기 금리차", mode: "spread", a: "TLT", b: "SHY", unit: "%", threshold: 0, riskOnHigh: false },
-    { label: "GDP 성장률", mode: "yoy", ticker: "SPY", unit: "%", threshold: 0, riskOnHigh: false },
-    { label: "실업률", mode: "single", ticker: "IWM", unit: "", threshold: 200, riskOnHigh: true },
-    { label: "신용 스프레드", mode: "spread", a: "HYG", b: "IEF", unit: "%", threshold: 4, riskOnHigh: true },
-    { label: "Fear & Greed", mode: "single", ticker: "QQQ", unit: "", threshold: 25, riskOnHigh: false },
-    { label: "WTI 유가", mode: "single", ticker: "USO", unit: "$", threshold: 100, riskOnHigh: true },
-    { label: "USD/JPY", mode: "single", ticker: "FXY", unit: "", threshold: 150, riskOnHigh: true },
-    { label: "실질금리", mode: "single", ticker: "TIP", unit: "", threshold: 120, riskOnHigh: true },
-    { label: "구리", mode: "single", ticker: "CPER", unit: "$", threshold: 3, riskOnHigh: false },
-    { label: "일드갭", mode: "spread", a: "SPY", b: "IEF", unit: "%", threshold: 0, riskOnHigh: false }
+    { label: "VIX", fred: "VIXCLS", unit: "", threshold: 30, riskOnHigh: true, help: "^VIX (변동성 지수)" },
+    { label: "WTI 유가", fred: "DCOILWTICO", unit: "$", threshold: 85, riskOnHigh: true, help: "CL=F (서부 텍사스산 원유 선물)" },
+    { label: "USD/JPY", fred: "DEXJPUS", unit: "", threshold: 150, riskOnHigh: true, help: "JPY=X (달러/엔 환율)" },
+    { label: "구리", fred: "PCOPPUSDM", unit: "$", threshold: 4, riskOnHigh: false, help: "HG=F (구리 선물 연동 지표)" },
+    { label: "금", fred: "GOLDAMGBD228NLBM", unit: "$", threshold: 2200, riskOnHigh: true, help: "GC=F (금 선물 연동 지표)" },
+    { label: "장단기 금리차", fred: "T10Y2Y", unit: "%", threshold: 0, riskOnHigh: false, help: "10년물 - 2년물 국채 금리차" },
+    { label: "실업률", fred: "UNRATE", unit: "%", threshold: 5, riskOnHigh: true, help: "미국 공식 실업률" },
+    { label: "신용 스프레드", fred: "BAMLH0A0HYM2", unit: "%", threshold: 4, riskOnHigh: true, help: "하이일드 채권 스프레드" },
+    { label: "실질금리", fred: "DFII10", unit: "%", threshold: 2, riskOnHigh: true, help: "10년물 물가연동국채 금리" }
 ];
 
 const subtitleText = document.getElementById("subtitle-text");
@@ -55,6 +53,7 @@ let authApi = null;
 let latestBaseDate = null;
 let loadingTickers = new Set();
 const historyCache = new Map();
+const fredCache = new Map();
 
 const settingsKey = () => `dashboard-settings:${currentUser?.uid || "guest"}`;
 
@@ -161,46 +160,58 @@ const getTickerHistory = async (ticker) => {
     return parsed;
 };
 
-const monthlySeries = (history) => {
+const toMonthlyTail = (series, size = 120) => {
     const out = [];
     let lastMonth = "";
-    history.forEach((row) => {
+    series.forEach((row) => {
         const month = row.date.slice(0, 7);
         if (month !== lastMonth) {
-            out.push({ date: row.date, value: row.close });
+            out.push(row);
             lastMonth = month;
         } else {
-            out[out.length - 1] = { date: row.date, value: row.close };
+            out[out.length - 1] = row;
         }
     });
-    return out.slice(-120);
+    return out.slice(-size);
 };
 
-const mergeSpreadSeries = (aSeries, bSeries) => {
-    const len = Math.min(aSeries.length, bSeries.length);
-    const out = [];
-    for (let i = 0; i < len; i += 1) {
-        const a = aSeries[aSeries.length - len + i];
-        const b = bSeries[bSeries.length - len + i];
-        out.push({
-            date: a.date,
-            value: ((a.value / b.value) - 1) * 100
-        });
-    }
-    return out;
-};
+const fetchFredSeries = async (seriesId) => {
+    if (fredCache.has(seriesId)) return fredCache.get(seriesId);
 
-const yoySeries = (series) => {
-    const out = [];
-    for (let i = 12; i < series.length; i += 1) {
-        const current = series[i];
-        const prev = series[i - 12];
-        out.push({
-            date: current.date,
-            value: ((current.value / prev.value) - 1) * 100
-        });
+    const cacheKey = `fred-cache:${seriesId}`;
+    try {
+        const cached = JSON.parse(localStorage.getItem(cacheKey) || "null");
+        if (cached && Date.now() - cached.ts < 1000 * 60 * 60 * 6) {
+            fredCache.set(seriesId, cached.data);
+            return cached.data;
+        }
+    } catch {
+        // ignore cache parse errors
     }
-    return out;
+
+    const url = `https://fred.stlouisfed.org/graph/fredgraph.csv?id=${seriesId}`;
+    const res = await fetch(url);
+    if (!res.ok) throw new Error(`FRED fetch failed: ${seriesId}`);
+    const raw = await res.text();
+    const lines = raw.trim().split("\n").slice(1);
+    const data = lines
+        .map((line) => {
+            const [date, value] = line.split(",");
+            if (!date || !value || value === ".") return null;
+            const num = Number(value);
+            if (!Number.isFinite(num)) return null;
+            return { date, value: num };
+        })
+        .filter(Boolean);
+
+    const monthly = toMonthlyTail(data, 120);
+    fredCache.set(seriesId, monthly);
+    try {
+        localStorage.setItem(cacheKey, JSON.stringify({ ts: Date.now(), data: monthly }));
+    } catch {
+        // ignore storage quota
+    }
+    return monthly;
 };
 
 const buildStockRow = (ticker, history) => {
@@ -234,30 +245,15 @@ const buildStockRow = (ticker, history) => {
 };
 
 const buildIndicatorRows = async () => {
-    const rows = [];
-    for (const def of indicatorDefs) {
-        if (def.mode === "single") {
-            const history = await getTickerHistory(def.ticker);
-            const series = monthlySeries(history);
+    const all = await Promise.all(
+        indicatorDefs.map(async (def) => {
+            const series = await fetchFredSeries(def.fred);
             const latest = series[series.length - 1];
-            rows.push({ ...def, series, value: latest.value, date: latest.date });
             latestBaseDate = latestBaseDate && latestBaseDate > latest.date ? latestBaseDate : latest.date;
-        } else if (def.mode === "spread") {
-            const a = monthlySeries(await getTickerHistory(def.a));
-            const b = monthlySeries(await getTickerHistory(def.b));
-            const series = mergeSpreadSeries(a, b);
-            const latest = series[series.length - 1];
-            rows.push({ ...def, series, value: latest.value, date: latest.date });
-            latestBaseDate = latestBaseDate && latestBaseDate > latest.date ? latestBaseDate : latest.date;
-        } else if (def.mode === "yoy") {
-            const base = monthlySeries(await getTickerHistory(def.ticker));
-            const series = yoySeries(base);
-            const latest = series[series.length - 1];
-            rows.push({ ...def, series, value: latest.value, date: latest.date });
-            latestBaseDate = latestBaseDate && latestBaseDate > latest.date ? latestBaseDate : latest.date;
-        }
-    }
-    return rows;
+            return { ...def, series, value: latest.value, date: latest.date };
+        })
+    );
+    return all;
 };
 
 const isRiskTriggered = (indicator) =>
@@ -293,22 +289,8 @@ const renderLineChart = (svg, tipEl, points, formatY) => {
         return line;
     };
 
-    const addText = (x, y, text, anchor = "middle") => {
-        const t = document.createElementNS("http://www.w3.org/2000/svg", "text");
-        t.setAttribute("x", String(x));
-        t.setAttribute("y", String(y));
-        t.setAttribute("class", "axis-text");
-        t.setAttribute("text-anchor", anchor);
-        t.textContent = text;
-        svg.appendChild(t);
-    };
-
     addLine(padLeft, padTop, padLeft, height - padBottom, "axis-line");
     addLine(padLeft, height - padBottom, width - padRight, height - padBottom, "axis-line");
-    addText(padLeft, padTop - 4, formatY(max), "start");
-    addText(padLeft, height - padBottom + 14, formatY(min), "start");
-    addText(padLeft, height - 8, points[0].date, "start");
-    addText(width - padRight, height - 8, points[points.length - 1].date, "end");
 
     const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
     const d = points
@@ -320,10 +302,12 @@ const renderLineChart = (svg, tipEl, points, formatY) => {
 
     const cross = addLine(padLeft, padTop, padLeft, height - padBottom, "crosshair");
 
-    const updateTip = (clientX) => {
+    const updateTip = (clientX, clientY) => {
         const rect = svg.getBoundingClientRect();
-        const x = Math.min(Math.max(clientX - rect.left, padLeft), width - padRight);
-        const ratio = (x - padLeft) / innerW;
+        const leftPx = (padLeft / width) * rect.width;
+        const rightPx = (padRight / width) * rect.width;
+        const xPx = Math.min(Math.max(clientX - rect.left, leftPx), rect.width - rightPx);
+        const ratio = (xPx - leftPx) / (rect.width - leftPx - rightPx);
         const idx = Math.round(ratio * (points.length - 1));
         const point = points[idx];
         const px = xAt(idx);
@@ -332,6 +316,10 @@ const renderLineChart = (svg, tipEl, points, formatY) => {
         cross.style.opacity = "1";
         tipEl.classList.remove("hidden");
         tipEl.textContent = `${point.date} | ${formatY(point.value)}`;
+        if (clientY) {
+            tipEl.style.left = `${Math.max(8, xPx - 72)}px`;
+            tipEl.style.top = `${Math.max(8, clientY - rect.top - 34)}px`;
+        }
     };
 
     const hideTip = () => {
@@ -339,13 +327,13 @@ const renderLineChart = (svg, tipEl, points, formatY) => {
         tipEl.classList.add("hidden");
     };
 
-    svg.onmousemove = (e) => updateTip(e.clientX);
+    svg.onmousemove = (e) => updateTip(e.clientX, e.clientY);
     svg.onmouseleave = hideTip;
     svg.ontouchstart = (e) => {
-        if (e.touches[0]) updateTip(e.touches[0].clientX);
+        if (e.touches[0]) updateTip(e.touches[0].clientX, e.touches[0].clientY);
     };
     svg.ontouchmove = (e) => {
-        if (e.touches[0]) updateTip(e.touches[0].clientX);
+        if (e.touches[0]) updateTip(e.touches[0].clientX, e.touches[0].clientY);
     };
     svg.ontouchend = hideTip;
 };
@@ -361,7 +349,13 @@ const renderIndicators = () => {
         const card = document.createElement("article");
         card.className = "risk-card";
         card.innerHTML = `
-            <div class="risk-title">${item.label}</div>
+            <div class="risk-title">
+                ${item.label}
+                <span class="help-wrap">
+                    <button type="button" class="help-dot">?</button>
+                    <span class="help-pop">${item.help}</span>
+                </span>
+            </div>
             <div class="risk-value">${item.value.toFixed(2)}${item.unit}</div>
             <div class="risk-threshold">임계값: ${item.threshold}${item.unit}</div>
             <div class="chart-wrap">
