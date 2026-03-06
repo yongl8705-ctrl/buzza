@@ -18,11 +18,17 @@
 
             <section class="panel">
                 <div class="panel-head">
-                    <h2>Filters</h2>
+                    <h2>Stocks</h2>
                 </div>
                 <div class="filters">
-                    <label for="ticker-search">Ticker Search</label>
-                    <input id="ticker-search" type="text" placeholder="SOXL, TQQQ, UPRO ...">
+                    <label for="ticker-input">Ticker Add</label>
+                    <div class="add-wrap">
+                        <input id="ticker-input" type="text" placeholder="AAPL, TSLA, QQQ ...">
+                        <button id="add-ticker-btn" type="button">Add</button>
+                    </div>
+                    <p id="add-message" class="add-message"></p>
+                    <label for="table-search">Table Search</label>
+                    <input id="table-search" type="text" placeholder="Search by ticker or name">
                     <label class="checkbox-wrap" for="entry-only">
                         <input id="entry-only" type="checkbox">
                         <span>추천 RSI 이하 종목만 보기</span>
@@ -58,8 +64,6 @@
                                 <th>20D%</th>
                                 <th>50D%</th>
                                 <th>200D%</th>
-                                <th>V2.2 자본</th>
-                                <th>V3.0 자본</th>
                             </tr>
                         </thead>
                         <tbody id="screening-body"></tbody>
