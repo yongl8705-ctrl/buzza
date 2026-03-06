@@ -37,6 +37,11 @@ const screeningBody = document.getElementById("screening-body");
 const rowCount = document.getElementById("row-count");
 const riskGrid = document.getElementById("risk-grid");
 const riskSummary = document.getElementById("risk-summary");
+const chartModal = document.getElementById("chart-modal");
+const chartModalClose = document.getElementById("chart-modal-close");
+const chartModalTitle = document.getElementById("chart-modal-title");
+const chartModalSubtitle = document.getElementById("chart-modal-subtitle");
+const dailyChartSvg = document.getElementById("daily-chart-svg");
 
 let screeningRows = [];
 let authApi = null;
@@ -85,7 +90,7 @@ const loadSettings = () => {
 
 const updateSubtitle = () => {
     const dateText = latestBaseDate || new Date().toISOString().slice(0, 10);
-    subtitleText.textContent = `Evan Traders screening-style indicators in one view. 기준일: ${dateText} (전날 종가 기준)`;
+    subtitleText.textContent = `기준일: ${dateText} (전날 종가 기준)`;
 };
 
 const applyTheme = (theme) => {
@@ -217,17 +222,23 @@ const mapTickerForStooq = (ticker) => `${ticker.toLowerCase()}.us`;
 
 const fetchCsvByTicker = async (ticker) => {
     const symbol = mapTickerForStooq(ticker);
-    const direct = `https://stooq.com/q/d/l/?s=${symbol}&i=d`;
-    const proxy = `https://r.jina.ai/http://stooq.com/q/d/l/?s=${symbol}&i=d`;
+    const urls = [
+        `https://r.jina.ai/http://stooq.com/q/d/l/?s=${symbol}&i=d`,
+        `https://stooq.com/q/d/l/?s=${symbol}&i=d`
+    ];
 
-    let res = await fetch(proxy);
-    if (!res.ok) {
-        res = await fetch(direct);
+    for (const url of urls) {
+        try {
+            const res = await fetch(url);
+            if (res.ok) {
+                return res.text();
+            }
+        } catch {
+            // Try next source.
+        }
     }
-    if (!res.ok) {
-        throw new Error("데이터 조회 실패");
-    }
-    return res.text();
+
+    throw new Error("데이터 조회 실패");
 };
 
 const buildRowFromHistory = (ticker, history) => {
@@ -258,7 +269,8 @@ const buildRowFromHistory = (ticker, history) => {
         day1: pctFrom(latest.close, d1.close) ?? 0,
         day20: pctFrom(latest.close, d20.close) ?? 0,
         day50: pctFrom(latest.close, d50.close) ?? 0,
-        day200: pctFrom(latest.close, d200.close) ?? 0
+        day200: pctFrom(latest.close, d200.close) ?? 0,
+        history3m: history.slice(-63)
     };
 };
 
@@ -288,7 +300,7 @@ const renderRows = () => {
             const isEntry = row.rsi <= row.recommendedRsi;
             const removing = loadingTickers.has(row.ticker);
             return `
-                <tr>
+                <tr data-ticker-row="${row.ticker}">
                     <td data-label="티커">${row.ticker}</td>
                     <td data-label="이름">${row.name}</td>
                     <td data-label="현재가">${formatPrice(row.currentPrice)}</td>
@@ -315,6 +327,81 @@ const removeTicker = (ticker) => {
     screeningRows = screeningRows.filter((row) => row.ticker !== ticker);
     renderRows();
     saveSettings();
+};
+
+const clearChartSvg = () => {
+    while (dailyChartSvg.firstChild) {
+        dailyChartSvg.removeChild(dailyChartSvg.firstChild);
+    }
+};
+
+const drawDailyChart = (row) => {
+    clearChartSvg();
+    const candles = row.history3m || [];
+    if (!candles.length) {
+        chartModalSubtitle.textContent = "차트 데이터 없음";
+        return;
+    }
+
+    const width = 860;
+    const height = 360;
+    const padX = 40;
+    const padY = 24;
+    const lows = candles.map((c) => c.low);
+    const highs = candles.map((c) => c.high);
+    const min = Math.min(...lows);
+    const max = Math.max(...highs);
+    const range = max - min || 1;
+    const step = (width - padX * 2) / candles.length;
+
+    const yScale = (price) => height - padY - ((price - min) / range) * (height - padY * 2);
+
+    for (let i = 0; i < 4; i += 1) {
+        const y = padY + ((height - padY * 2) / 3) * i;
+        const grid = document.createElementNS("http://www.w3.org/2000/svg", "line");
+        grid.setAttribute("x1", String(padX));
+        grid.setAttribute("x2", String(width - padX));
+        grid.setAttribute("y1", String(y));
+        grid.setAttribute("y2", String(y));
+        grid.setAttribute("class", "grid");
+        dailyChartSvg.appendChild(grid);
+    }
+
+    candles.forEach((candle, idx) => {
+        const x = padX + step * idx + step * 0.5;
+        const up = candle.close >= candle.open;
+        const line = document.createElementNS("http://www.w3.org/2000/svg", "line");
+        line.setAttribute("x1", String(x));
+        line.setAttribute("x2", String(x));
+        line.setAttribute("y1", String(yScale(candle.high)));
+        line.setAttribute("y2", String(yScale(candle.low)));
+        line.setAttribute("class", up ? "candle-up" : "candle-down");
+        line.setAttribute("stroke-opacity", "0.55");
+        dailyChartSvg.appendChild(line);
+
+        const body = document.createElementNS("http://www.w3.org/2000/svg", "line");
+        body.setAttribute("x1", String(x));
+        body.setAttribute("x2", String(x));
+        body.setAttribute("y1", String(yScale(candle.open)));
+        body.setAttribute("y2", String(yScale(candle.close)));
+        body.setAttribute("class", up ? "candle-up" : "candle-down");
+        body.setAttribute("stroke-width", "4");
+        dailyChartSvg.appendChild(body);
+    });
+
+    chartModalSubtitle.textContent = `${candles[0].date} ~ ${candles[candles.length - 1].date} | 최근 3개월 일봉`;
+};
+
+const openChartModal = (ticker) => {
+    const row = screeningRows.find((item) => item.ticker === ticker);
+    if (!row) return;
+    chartModalTitle.textContent = `${ticker} 최근 3개월 일봉 차트`;
+    drawDailyChart(row);
+    chartModal.classList.remove("hidden");
+};
+
+const closeChartModal = () => {
+    chartModal.classList.add("hidden");
 };
 
 const addTicker = async () => {
@@ -414,9 +501,16 @@ const setupAuth = async () => {
 
 screeningBody.addEventListener("click", (event) => {
     const button = event.target.closest("[data-remove]");
-    if (!button) return;
-    const ticker = button.getAttribute("data-remove");
-    removeTicker(ticker);
+    if (button) {
+        const ticker = button.getAttribute("data-remove");
+        removeTicker(ticker);
+        return;
+    }
+
+    const rowElement = event.target.closest("[data-ticker-row]");
+    if (!rowElement) return;
+    const ticker = rowElement.getAttribute("data-ticker-row");
+    openChartModal(ticker);
 });
 
 addTickerBtn.addEventListener("click", addTicker);
@@ -466,6 +560,13 @@ appleLoginBtn.addEventListener("click", async () => {
 logoutBtn.addEventListener("click", async () => {
     if (!authApi) return;
     await authApi.signOut(authApi.auth);
+});
+
+chartModalClose.addEventListener("click", closeChartModal);
+chartModal.addEventListener("click", (event) => {
+    if (event.target.matches("[data-close-modal='true']")) {
+        closeChartModal();
+    }
 });
 
 applyTheme("dark");

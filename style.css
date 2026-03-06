@@ -190,6 +190,12 @@ label {
     font-size: 0.9rem;
 }
 
+.content-panel p {
+    margin: 10px 0 0;
+    color: var(--muted);
+    line-height: 1.65;
+}
+
 .checkbox-wrap {
     grid-column: 1 / -1;
     display: inline-flex;
@@ -324,6 +330,86 @@ tr:hover td {
     font-weight: 700;
 }
 
+.modal {
+    position: fixed;
+    inset: 0;
+    z-index: 40;
+    display: grid;
+    place-items: center;
+}
+
+.modal.hidden {
+    display: none;
+}
+
+.modal-backdrop {
+    position: absolute;
+    inset: 0;
+    background: rgba(4, 10, 18, 0.66);
+}
+
+.modal-card {
+    position: relative;
+    width: min(940px, 95vw);
+    max-height: 88vh;
+    overflow: auto;
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    background: var(--bg-soft);
+    padding: 14px;
+}
+
+.modal-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 10px;
+}
+
+.modal-head h3 {
+    margin: 0;
+    font-size: 1.05rem;
+}
+
+.modal-close-btn {
+    border: 1px solid var(--line);
+    background: var(--card);
+    color: var(--text);
+    border-radius: 7px;
+    padding: 6px 10px;
+    cursor: pointer;
+}
+
+.modal-subtitle {
+    margin: 8px 0 10px;
+    color: var(--muted);
+    font-size: 0.9rem;
+}
+
+.daily-chart {
+    width: 100%;
+    height: 340px;
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    background: color-mix(in srgb, var(--bg-soft) 85%, #0f1b2f 15%);
+}
+
+.daily-chart .grid {
+    stroke: #3a5072;
+    stroke-width: 1;
+    opacity: 0.6;
+}
+
+.daily-chart .candle-up {
+    stroke: #34be76;
+    stroke-width: 2;
+}
+
+.daily-chart .candle-down {
+    stroke: #f07070;
+    stroke-width: 2;
+}
+
 @media (max-width: 760px) {
     h1 {
         font-size: 1.5rem;
@@ -385,5 +471,9 @@ tr:hover td {
     .table-remove-btn {
         width: 100%;
         height: 32px;
+    }
+
+    .daily-chart {
+        height: 260px;
     }
 }
