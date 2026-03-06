@@ -11,6 +11,19 @@
     --amber: #f5c55f;
 }
 
+[data-theme="light"] {
+    --bg: #f5f8fc;
+    --bg-soft: #ffffff;
+    --card: #ffffff;
+    --line: #ccd8ea;
+    --text: #18202c;
+    --muted: #617088;
+    --blue: #2e7ed8;
+    --green: #2c9f62;
+    --red: #d85757;
+    --amber: #bf9234;
+}
+
 * {
     box-sizing: border-box;
 }
@@ -40,6 +53,13 @@ body {
     padding: 8px 2px 4px;
 }
 
+.hero-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 12px;
+}
+
 h1 {
     margin: 0;
     font-size: 1.9rem;
@@ -50,8 +70,18 @@ h1 {
     color: var(--muted);
 }
 
+.theme-btn {
+    border: 1px solid var(--line);
+    background: var(--card);
+    color: var(--text);
+    border-radius: 8px;
+    height: 36px;
+    padding: 0 12px;
+    cursor: pointer;
+}
+
 .panel {
-    background: linear-gradient(180deg, #101f33 0%, var(--bg-soft) 100%);
+    background: linear-gradient(180deg, color-mix(in srgb, var(--bg-soft) 92%, #1d3557 8%) 0%, var(--bg-soft) 100%);
     border: 1px solid var(--line);
     border-radius: 12px;
     padding: 14px;
@@ -108,12 +138,56 @@ label {
     cursor: pointer;
 }
 
+.table-remove-btn {
+    border: 1px solid #7e3540;
+    background: #55242b;
+    color: #ffd4d4;
+    border-radius: 7px;
+    padding: 4px 9px;
+    font-size: 0.8rem;
+    cursor: pointer;
+}
+
+[data-theme="light"] .table-remove-btn {
+    background: #fff1f1;
+    color: #9e3f3f;
+    border-color: #dfa0a0;
+}
+
 .add-message {
     margin: 0;
     min-height: 20px;
     grid-column: 2;
     font-size: 0.84rem;
     color: var(--muted);
+}
+
+.auth-wrap {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    align-items: center;
+}
+
+.auth-wrap button {
+    border: 1px solid var(--line);
+    background: #14263d;
+    color: #dde8f8;
+    border-radius: 8px;
+    height: 34px;
+    padding: 0 12px;
+    cursor: pointer;
+}
+
+[data-theme="light"] .auth-wrap button {
+    background: #edf3fb;
+    color: #1f2d40;
+}
+
+.auth-status {
+    margin: 0;
+    color: var(--muted);
+    font-size: 0.9rem;
 }
 
 .checkbox-wrap {
@@ -255,6 +329,11 @@ tr:hover td {
         font-size: 1.5rem;
     }
 
+    .hero-row {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+
     .filters {
         grid-template-columns: 1fr;
     }
@@ -301,5 +380,10 @@ tr:hover td {
         color: var(--muted);
         font-size: 0.78rem;
         margin-right: 8px;
+    }
+
+    .table-remove-btn {
+        width: 100%;
+        height: 32px;
     }
 }

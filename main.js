@@ -6,7 +6,7 @@ const knownStocks = {
     MSFT: "Microsoft Corp."
 };
 
-const initialTickers = ["AAPL", "TSLA", "QQQ", "SPY", "MSFT"];
+const defaultTickers = ["AAPL", "TSLA", "QQQ", "SPY", "MSFT"];
 
 const indicatorMeta = [
     { label: "VIX", threshold: 30, unit: "", riskOnHigh: true, min: 10, max: 60 },
@@ -22,17 +22,27 @@ const indicatorMeta = [
     { label: "일드갭", threshold: 0, unit: "%", riskOnHigh: false, min: -3, max: 3 }
 ];
 
+const subtitleText = document.getElementById("subtitle-text");
+const themeToggleBtn = document.getElementById("theme-toggle-btn");
 const tickerInput = document.getElementById("ticker-input");
 const addTickerBtn = document.getElementById("add-ticker-btn");
 const addMessage = document.getElementById("add-message");
 const tableSearch = document.getElementById("table-search");
 const entryOnly = document.getElementById("entry-only");
+const googleLoginBtn = document.getElementById("google-login-btn");
+const appleLoginBtn = document.getElementById("apple-login-btn");
+const logoutBtn = document.getElementById("logout-btn");
+const authStatus = document.getElementById("auth-status");
 const screeningBody = document.getElementById("screening-body");
 const rowCount = document.getElementById("row-count");
 const riskGrid = document.getElementById("risk-grid");
 const riskSummary = document.getElementById("risk-summary");
 
 let screeningRows = [];
+let authApi = null;
+let currentUser = null;
+let loadingTickers = new Set();
+let latestBaseDate = null;
 
 const hashString = (text) => {
     let hash = 0;
@@ -50,34 +60,47 @@ const pseudoRandom = (seed) => {
 
 const formatPercent = (value) => `${value >= 0 ? "+" : ""}${value.toFixed(2)}%`;
 const formatPrice = (value) => `$${value.toFixed(2)}`;
-
 const signClass = (value) => (value >= 0 ? "pos" : "neg");
 
-const createStockRow = (ticker) => {
-    const symbol = ticker.toUpperCase();
-    const seed = hashString(symbol);
-    const base = 40 + pseudoRandom(seed) * 360;
-    const rsi = 20 + pseudoRandom(seed + 1) * 30;
-    const recommendedRsi = 28 + Math.floor(pseudoRandom(seed + 2) * 6);
-    const inEntry = rsi <= recommendedRsi;
+const settingsKey = () => `screening-settings:${currentUser?.uid || "guest"}`;
 
-    return {
-        ticker: symbol,
-        name: knownStocks[symbol] || `${symbol} Corp.`,
-        currentPrice: Number(base.toFixed(2)),
-        volume: Math.round(1_500_000 + pseudoRandom(seed + 3) * 95_000_000),
-        rsi: Number(rsi.toFixed(1)),
-        recommendedRsi,
-        entryDays: inEntry ? Math.floor(pseudoRandom(seed + 4) * 10) + 1 : null,
-        day1: Number((-3 + pseudoRandom(seed + 5) * 6).toFixed(2)),
-        day20: Number((-12 + pseudoRandom(seed + 6) * 24).toFixed(2)),
-        day50: Number((-18 + pseudoRandom(seed + 7) * 38).toFixed(2)),
-        day200: Number((-30 + pseudoRandom(seed + 8) * 85).toFixed(2))
+const saveSettings = () => {
+    const settings = {
+        theme: document.documentElement.dataset.theme || "dark",
+        entryOnly: entryOnly.checked,
+        tickers: screeningRows.map((row) => row.ticker)
     };
+    localStorage.setItem(settingsKey(), JSON.stringify(settings));
+};
+
+const loadSettings = () => {
+    const raw = localStorage.getItem(settingsKey());
+    if (!raw) return null;
+    try {
+        return JSON.parse(raw);
+    } catch {
+        return null;
+    }
+};
+
+const updateSubtitle = () => {
+    const dateText = latestBaseDate || new Date().toISOString().slice(0, 10);
+    subtitleText.textContent = `Evan Traders screening-style indicators in one view. 기준일: ${dateText} (전날 종가 기준)`;
+};
+
+const applyTheme = (theme) => {
+    document.documentElement.dataset.theme = theme;
+    themeToggleBtn.textContent = theme === "dark" ? "Light Mode" : "Dark Mode";
+    saveSettings();
+};
+
+const setAddMessage = (text, isError = false) => {
+    addMessage.style.color = isError ? "#ff9e9e" : "";
+    addMessage.textContent = text;
 };
 
 const createHistory = (meta) => {
-    const points = 120; // 10 years monthly
+    const points = 120;
     const seed = hashString(meta.label);
     let current = meta.min + pseudoRandom(seed) * (meta.max - meta.min);
     const values = [];
@@ -104,8 +127,6 @@ const economicIndicators = indicatorMeta.map((meta) => {
 const isRiskTriggered = (indicator) =>
     indicator.riskOnHigh ? indicator.value >= indicator.threshold : indicator.value <= indicator.threshold;
 
-const riskBadgeClass = (triggered) => (triggered ? "danger" : "good");
-
 const createSparkPath = (values, width, height, padding) => {
     const min = Math.min(...values);
     const max = Math.max(...values);
@@ -122,33 +143,31 @@ const createSparkPath = (values, width, height, padding) => {
 };
 
 const renderRiskIndicators = () => {
-    let triggeredCount = 0;
+    let triggered = 0;
     riskGrid.innerHTML = economicIndicators
         .map((indicator) => {
-            const triggered = isRiskTriggered(indicator);
-            if (triggered) triggeredCount += 1;
-
-            const points = createSparkPath(indicator.history, 240, 70, 6);
+            const hit = isRiskTriggered(indicator);
+            if (hit) triggered += 1;
             return `
                 <article class="risk-card">
                     <div class="risk-title">${indicator.label}</div>
                     <div class="risk-value">${indicator.value}${indicator.unit}</div>
                     <div class="risk-threshold">임계값: ${indicator.threshold}${indicator.unit} | 최근 10년(월별)</div>
-                    <svg class="risk-chart" viewBox="0 0 240 70" preserveAspectRatio="none" aria-label="${indicator.label} 10-year chart">
+                    <svg class="risk-chart" viewBox="0 0 240 70" preserveAspectRatio="none">
                         <line x1="0" y1="64" x2="240" y2="64" class="axis"></line>
-                        <polyline points="${points}" class="line"></polyline>
+                        <polyline points="${createSparkPath(indicator.history, 240, 70, 6)}" class="line"></polyline>
                     </svg>
-                    <span class="badge ${riskBadgeClass(triggered)}">${triggered ? "위험 신호" : "정상"}</span>
+                    <span class="badge ${hit ? "danger" : "good"}">${hit ? "위험 신호" : "정상"}</span>
                 </article>
             `;
         })
         .join("");
 
-    const ratio = `${triggeredCount}/${economicIndicators.length}`;
-    if (triggeredCount >= 6) {
+    const ratio = `${triggered}/${economicIndicators.length}`;
+    if (triggered >= 6) {
         riskSummary.className = "badge danger";
         riskSummary.textContent = `위험 높음 (${ratio})`;
-    } else if (triggeredCount >= 3) {
+    } else if (triggered >= 3) {
         riskSummary.className = "badge warn";
         riskSummary.textContent = `주의 (${ratio})`;
     } else {
@@ -157,13 +176,106 @@ const renderRiskIndicators = () => {
     }
 };
 
+const parseCsvHistory = (raw) => {
+    const lines = raw
+        .split("\n")
+        .map((line) => line.trim())
+        .filter((line) => /^\d{4}-\d{2}-\d{2},/.test(line));
+
+    return lines.map((line) => {
+        const [date, open, high, low, close, volume] = line.split(",");
+        return {
+            date,
+            open: Number(open),
+            high: Number(high),
+            low: Number(low),
+            close: Number(close),
+            volume: Number(volume)
+        };
+    });
+};
+
+const computeRsi14 = (closes) => {
+    if (closes.length < 15) return null;
+    let gain = 0;
+    let loss = 0;
+    for (let i = closes.length - 14; i < closes.length; i += 1) {
+        const diff = closes[i] - closes[i - 1];
+        if (diff > 0) gain += diff;
+        else loss -= diff;
+    }
+    const avgGain = gain / 14;
+    const avgLoss = loss / 14;
+    if (avgLoss === 0) return 100;
+    const rs = avgGain / avgLoss;
+    return 100 - 100 / (1 + rs);
+};
+
+const pctFrom = (latest, prev) => (prev ? ((latest - prev) / prev) * 100 : null);
+
+const mapTickerForStooq = (ticker) => `${ticker.toLowerCase()}.us`;
+
+const fetchCsvByTicker = async (ticker) => {
+    const symbol = mapTickerForStooq(ticker);
+    const direct = `https://stooq.com/q/d/l/?s=${symbol}&i=d`;
+    const proxy = `https://r.jina.ai/http://stooq.com/q/d/l/?s=${symbol}&i=d`;
+
+    let res = await fetch(proxy);
+    if (!res.ok) {
+        res = await fetch(direct);
+    }
+    if (!res.ok) {
+        throw new Error("데이터 조회 실패");
+    }
+    return res.text();
+};
+
+const buildRowFromHistory = (ticker, history) => {
+    if (history.length < 220) {
+        throw new Error("히스토리 데이터 부족");
+    }
+
+    const latest = history[history.length - 1];
+    const d1 = history[history.length - 2];
+    const d20 = history[history.length - 21];
+    const d50 = history[history.length - 51];
+    const d200 = history[history.length - 201];
+    const closes = history.map((item) => item.close);
+    const rsi = computeRsi14(closes);
+    const recommendedRsi = 30;
+    const entrySignal = rsi !== null && rsi <= recommendedRsi;
+
+    latestBaseDate = latestBaseDate && latestBaseDate > latest.date ? latestBaseDate : latest.date;
+
+    return {
+        ticker,
+        name: knownStocks[ticker] || `${ticker} Corp.`,
+        currentPrice: latest.close, // 기준값: 전날 종가
+        volume: latest.volume,
+        rsi: rsi ?? 50,
+        recommendedRsi,
+        entryDays: entrySignal ? 1 : null,
+        day1: pctFrom(latest.close, d1.close) ?? 0,
+        day20: pctFrom(latest.close, d20.close) ?? 0,
+        day50: pctFrom(latest.close, d50.close) ?? 0,
+        day200: pctFrom(latest.close, d200.close) ?? 0
+    };
+};
+
+const fetchRealStockRow = async (ticker) => {
+    const upper = ticker.toUpperCase();
+    const raw = await fetchCsvByTicker(upper);
+    const history = parseCsvHistory(raw);
+    return buildRowFromHistory(upper, history);
+};
+
 const filterRows = () => {
     const q = tableSearch.value.trim().toUpperCase();
-    const mustBeEntry = entryOnly.checked;
+    const onlyEntry = entryOnly.checked;
     return screeningRows.filter((row) => {
-        const matchesSearch = row.ticker.includes(q) || row.name.toUpperCase().includes(q);
-        const matchesEntry = mustBeEntry ? row.rsi <= row.recommendedRsi : true;
-        return matchesSearch && matchesEntry;
+        const matches = row.ticker.includes(q) || row.name.toUpperCase().includes(q);
+        const entryMatches = onlyEntry ? row.rsi <= row.recommendedRsi : true;
+        return matches && entryMatches;
     });
 };
 
@@ -174,7 +286,7 @@ const renderRows = () => {
     screeningBody.innerHTML = rows
         .map((row) => {
             const isEntry = row.rsi <= row.recommendedRsi;
-            const entryText = isEntry ? `${row.entryDays ?? 0}일차` : "-";
+            const removing = loadingTickers.has(row.ticker);
             return `
                 <tr>
                     <td data-label="티커">${row.ticker}</td>
@@ -183,38 +295,129 @@ const renderRows = () => {
                     <td data-label="거래량">${row.volume.toLocaleString("en-US")}</td>
                     <td data-label="RSI" class="${isEntry ? "entry" : ""}">${row.rsi.toFixed(1)}</td>
                     <td data-label="추천 RSI">${row.recommendedRsi.toFixed(0)}</td>
-                    <td data-label="진입경과" class="${isEntry ? "entry" : ""}">${entryText}</td>
+                    <td data-label="진입경과" class="${isEntry ? "entry" : ""}">${isEntry ? `${row.entryDays ?? 1}일차` : "-"}</td>
                     <td data-label="1D%" class="${signClass(row.day1)}">${formatPercent(row.day1)}</td>
                     <td data-label="20D%" class="${signClass(row.day20)}">${formatPercent(row.day20)}</td>
                     <td data-label="50D%" class="${signClass(row.day50)}">${formatPercent(row.day50)}</td>
                     <td data-label="200D%" class="${signClass(row.day200)}">${formatPercent(row.day200)}</td>
+                    <td data-label="관리">
+                        <button class="table-remove-btn" data-remove="${row.ticker}" ${removing ? "disabled" : ""}>삭제</button>
+                    </td>
                 </tr>
             `;
         })
         .join("");
+
+    updateSubtitle();
 };
 
-const showAddMessage = (text, isError = false) => {
-    addMessage.style.color = isError ? "#ff9e9e" : "#9caecc";
-    addMessage.textContent = text;
+const removeTicker = (ticker) => {
+    screeningRows = screeningRows.filter((row) => row.ticker !== ticker);
+    renderRows();
+    saveSettings();
 };
 
-const addTicker = () => {
+const addTicker = async () => {
     const symbol = tickerInput.value.trim().toUpperCase();
     if (!/^[A-Z]{1,6}$/.test(symbol)) {
-        showAddMessage("티커는 영문 1~6자로 입력하세요.", true);
+        setAddMessage("티커는 영문 1~6자로 입력하세요.", true);
         return;
     }
     if (screeningRows.some((row) => row.ticker === symbol)) {
-        showAddMessage(`${symbol}은 이미 추가되어 있습니다.`, true);
+        setAddMessage(`${symbol}은 이미 추가되어 있습니다.`, true);
+        return;
+    }
+    if (loadingTickers.has(symbol)) return;
+
+    loadingTickers.add(symbol);
+    setAddMessage(`${symbol} 실데이터 조회 중...`);
+    renderRows();
+    try {
+        const row = await fetchRealStockRow(symbol);
+        screeningRows.push(row);
+        tickerInput.value = "";
+        setAddMessage(`${symbol} 추가 완료 (기준: 전날 종가).`);
+        saveSettings();
+    } catch (error) {
+        setAddMessage(`${symbol} 조회 실패: 티커 확인 또는 데이터 소스 제한`, true);
+    } finally {
+        loadingTickers.delete(symbol);
+        renderRows();
+    }
+};
+
+const initializeDefaultStocks = async (tickers) => {
+    loadingTickers = new Set(tickers);
+    renderRows();
+
+    const results = await Promise.all(
+        tickers.map(async (ticker) => {
+            try {
+                return await fetchRealStockRow(ticker);
+            } catch {
+                return null;
+            }
+        })
+    );
+
+    screeningRows = results.filter(Boolean);
+    loadingTickers = new Set();
+    renderRows();
+};
+
+const loadUserContext = async () => {
+    const settings = loadSettings();
+    if (settings?.theme) {
+        applyTheme(settings.theme);
+    }
+    if (settings?.entryOnly) {
+        entryOnly.checked = true;
+    }
+
+    const tickers = settings?.tickers?.length ? settings.tickers : defaultTickers;
+    await initializeDefaultStocks(tickers);
+};
+
+const setupAuth = async () => {
+    const config = window.FIREBASE_CONFIG;
+    if (!config) {
+        authStatus.textContent = "로그인 미설정 (window.FIREBASE_CONFIG 필요) - 게스트 저장 사용 중";
+        await loadUserContext();
         return;
     }
 
-    screeningRows.push(createStockRow(symbol));
-    tickerInput.value = "";
-    showAddMessage(`${symbol} 종목이 추가되었습니다.`);
-    renderRows();
+    try {
+        const [{ initializeApp }, { getAuth, GoogleAuthProvider, OAuthProvider, signInWithPopup, signOut, onAuthStateChanged }] =
+            await Promise.all([
+                import("https://www.gstatic.com/firebasejs/10.12.4/firebase-app.js"),
+                import("https://www.gstatic.com/firebasejs/10.12.4/firebase-auth.js")
+            ]);
+
+        const app = initializeApp(config);
+        const auth = getAuth(app);
+        authApi = { auth, GoogleAuthProvider, OAuthProvider, signInWithPopup, signOut };
+
+        onAuthStateChanged(auth, async (user) => {
+            currentUser = user || null;
+            if (currentUser) {
+                authStatus.textContent = `로그인됨: ${currentUser.email || currentUser.uid}`;
+            } else {
+                authStatus.textContent = "로그인 안됨 (게스트 모드)";
+            }
+            await loadUserContext();
+        });
+    } catch {
+        authStatus.textContent = "로그인 모듈 로드 실패 - 게스트 저장 사용 중";
+        await loadUserContext();
+    }
 };
+
+screeningBody.addEventListener("click", (event) => {
+    const button = event.target.closest("[data-remove]");
+    if (!button) return;
+    const ticker = button.getAttribute("data-remove");
+    removeTicker(ticker);
+});
 
 addTickerBtn.addEventListener("click", addTicker);
 tickerInput.addEventListener("keydown", (event) => {
@@ -223,9 +426,48 @@ tickerInput.addEventListener("keydown", (event) => {
         addTicker();
     }
 });
-tableSearch.addEventListener("input", renderRows);
-entryOnly.addEventListener("change", renderRows);
 
-screeningRows = initialTickers.map(createStockRow);
+entryOnly.addEventListener("change", () => {
+    renderRows();
+    saveSettings();
+});
+tableSearch.addEventListener("input", renderRows);
+
+themeToggleBtn.addEventListener("click", () => {
+    const current = document.documentElement.dataset.theme || "dark";
+    applyTheme(current === "dark" ? "light" : "dark");
+});
+
+googleLoginBtn.addEventListener("click", async () => {
+    if (!authApi) {
+        authStatus.textContent = "Firebase 설정이 없어 Google 로그인 불가";
+        return;
+    }
+    try {
+        await authApi.signInWithPopup(authApi.auth, new authApi.GoogleAuthProvider());
+    } catch {
+        authStatus.textContent = "Google 로그인 실패";
+    }
+});
+
+appleLoginBtn.addEventListener("click", async () => {
+    if (!authApi) {
+        authStatus.textContent = "Firebase 설정이 없어 Apple 로그인 불가";
+        return;
+    }
+    try {
+        const provider = new authApi.OAuthProvider("apple.com");
+        await authApi.signInWithPopup(authApi.auth, provider);
+    } catch {
+        authStatus.textContent = "Apple 로그인 실패 (Firebase Apple 설정 필요)";
+    }
+});
+
+logoutBtn.addEventListener("click", async () => {
+    if (!authApi) return;
+    await authApi.signOut(authApi.auth);
+});
+
+applyTheme("dark");
 renderRiskIndicators();
-renderRows();
+setupAuth();

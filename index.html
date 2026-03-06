@@ -11,9 +11,12 @@
         <section class="container">
             <header class="hero">
                 <h1>Stock Screening Dashboard</h1>
-                <p class="subtitle">
-                    Evan Traders screening-style indicators in one view.
-                </p>
+                <div class="hero-row">
+                    <p id="subtitle-text" class="subtitle">
+                        Evan Traders screening-style indicators in one view. 기준일: 로딩 중
+                    </p>
+                    <button id="theme-toggle-btn" type="button" class="theme-btn">Light Mode</button>
+                </div>
             </header>
 
             <section class="panel">
@@ -33,6 +36,18 @@
                         <input id="entry-only" type="checkbox">
                         <span>추천 RSI 이하 종목만 보기</span>
                     </label>
+                </div>
+            </section>
+
+            <section class="panel">
+                <div class="panel-head">
+                    <h2>Login & Save</h2>
+                </div>
+                <div class="auth-wrap">
+                    <button id="google-login-btn" type="button">Google 로그인</button>
+                    <button id="apple-login-btn" type="button">Apple 로그인</button>
+                    <button id="logout-btn" type="button">로그아웃</button>
+                    <p id="auth-status" class="auth-status">로그인 안됨 (게스트 모드)</p>
                 </div>
             </section>
 
@@ -64,6 +79,7 @@
                                 <th>20D%</th>
                                 <th>50D%</th>
                                 <th>200D%</th>
+                                <th>관리</th>
                             </tr>
                         </thead>
                         <tbody id="screening-body"></tbody>
@@ -72,6 +88,6 @@
             </section>
         </section>
     </main>
-    <script src="main.js"></script>
+    <script type="module" src="main.js"></script>
 </body>
 </html>
