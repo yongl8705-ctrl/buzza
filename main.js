@@ -8,31 +8,30 @@ const knownStocks = {
 
 const defaultTickers = ["AAPL", "TSLA", "QQQ", "SPY", "MSFT"];
 
-const indicatorMeta = [
-    { label: "VIX", threshold: 30, unit: "", riskOnHigh: true, min: 10, max: 60 },
-    { label: "장단기 금리차", threshold: 0, unit: "%", riskOnHigh: false, min: -2, max: 3 },
-    { label: "GDP 성장률", threshold: 0, unit: "%", riskOnHigh: false, min: -4, max: 6 },
-    { label: "실업률", threshold: 5, unit: "%", riskOnHigh: true, min: 2, max: 11 },
-    { label: "신용 스프레드", threshold: 4, unit: "%", riskOnHigh: true, min: 1, max: 8 },
-    { label: "Fear & Greed", threshold: 25, unit: "", riskOnHigh: false, min: 0, max: 100 },
-    { label: "WTI 유가", threshold: 100, unit: "$", riskOnHigh: true, min: 30, max: 140 },
-    { label: "USD/JPY", threshold: 150, unit: "", riskOnHigh: true, min: 80, max: 170 },
-    { label: "실질금리", threshold: 2, unit: "%", riskOnHigh: true, min: -2, max: 4 },
-    { label: "구리", threshold: 3, unit: "$/lb", riskOnHigh: false, min: 1.5, max: 5.5 },
-    { label: "일드갭", threshold: 0, unit: "%", riskOnHigh: false, min: -3, max: 3 }
+const indicatorDefs = [
+    { label: "VIX", mode: "single", ticker: "VXX", unit: "", threshold: 30, riskOnHigh: true },
+    { label: "장단기 금리차", mode: "spread", a: "TLT", b: "SHY", unit: "%", threshold: 0, riskOnHigh: false },
+    { label: "GDP 성장률", mode: "yoy", ticker: "SPY", unit: "%", threshold: 0, riskOnHigh: false },
+    { label: "실업률", mode: "single", ticker: "IWM", unit: "", threshold: 200, riskOnHigh: true },
+    { label: "신용 스프레드", mode: "spread", a: "HYG", b: "IEF", unit: "%", threshold: 4, riskOnHigh: true },
+    { label: "Fear & Greed", mode: "single", ticker: "QQQ", unit: "", threshold: 25, riskOnHigh: false },
+    { label: "WTI 유가", mode: "single", ticker: "USO", unit: "$", threshold: 100, riskOnHigh: true },
+    { label: "USD/JPY", mode: "single", ticker: "FXY", unit: "", threshold: 150, riskOnHigh: true },
+    { label: "실질금리", mode: "single", ticker: "TIP", unit: "", threshold: 120, riskOnHigh: true },
+    { label: "구리", mode: "single", ticker: "CPER", unit: "$", threshold: 3, riskOnHigh: false },
+    { label: "일드갭", mode: "spread", a: "SPY", b: "IEF", unit: "%", threshold: 0, riskOnHigh: false }
 ];
 
 const subtitleText = document.getElementById("subtitle-text");
 const themeToggleBtn = document.getElementById("theme-toggle-btn");
+const menuToggleBtn = document.getElementById("menu-toggle-btn");
+const sideMenu = document.getElementById("side-menu");
+const loginOpenBtn = document.getElementById("login-open-btn");
 const tickerInput = document.getElementById("ticker-input");
 const addTickerBtn = document.getElementById("add-ticker-btn");
 const addMessage = document.getElementById("add-message");
 const tableSearch = document.getElementById("table-search");
 const entryOnly = document.getElementById("entry-only");
-const googleLoginBtn = document.getElementById("google-login-btn");
-const appleLoginBtn = document.getElementById("apple-login-btn");
-const logoutBtn = document.getElementById("logout-btn");
-const authStatus = document.getElementById("auth-status");
 const screeningBody = document.getElementById("screening-body");
 const rowCount = document.getElementById("row-count");
 const riskGrid = document.getElementById("risk-grid");
@@ -42,38 +41,28 @@ const chartModalClose = document.getElementById("chart-modal-close");
 const chartModalTitle = document.getElementById("chart-modal-title");
 const chartModalSubtitle = document.getElementById("chart-modal-subtitle");
 const dailyChartSvg = document.getElementById("daily-chart-svg");
+const dailyChartTip = document.getElementById("daily-chart-tip");
+const loginModal = document.getElementById("login-modal");
+const loginModalClose = document.getElementById("login-modal-close");
+const googleLoginBtn = document.getElementById("google-login-btn");
+const logoutBtn = document.getElementById("logout-btn");
+const authStatus = document.getElementById("auth-status");
 
-let screeningRows = [];
-let authApi = null;
+let stockRows = [];
+let indicatorRows = [];
 let currentUser = null;
-let loadingTickers = new Set();
+let authApi = null;
 let latestBaseDate = null;
+let loadingTickers = new Set();
+const historyCache = new Map();
 
-const hashString = (text) => {
-    let hash = 0;
-    for (let i = 0; i < text.length; i += 1) {
-        hash = (hash << 5) - hash + text.charCodeAt(i);
-        hash |= 0;
-    }
-    return Math.abs(hash);
-};
-
-const pseudoRandom = (seed) => {
-    const x = Math.sin(seed) * 10000;
-    return x - Math.floor(x);
-};
-
-const formatPercent = (value) => `${value >= 0 ? "+" : ""}${value.toFixed(2)}%`;
-const formatPrice = (value) => `$${value.toFixed(2)}`;
-const signClass = (value) => (value >= 0 ? "pos" : "neg");
-
-const settingsKey = () => `screening-settings:${currentUser?.uid || "guest"}`;
+const settingsKey = () => `dashboard-settings:${currentUser?.uid || "guest"}`;
 
 const saveSettings = () => {
     const settings = {
         theme: document.documentElement.dataset.theme || "dark",
         entryOnly: entryOnly.checked,
-        tickers: screeningRows.map((row) => row.ticker)
+        tickers: stockRows.map((row) => row.ticker)
     };
     localStorage.setItem(settingsKey(), JSON.stringify(settings));
 };
@@ -90,7 +79,7 @@ const loadSettings = () => {
 
 const updateSubtitle = () => {
     const dateText = latestBaseDate || new Date().toISOString().slice(0, 10);
-    subtitleText.textContent = `기준일: ${dateText} (전날 종가 기준)`;
+    subtitleText.textContent = `기준일: ${dateText} (전일 종가 기준)`;
 };
 
 const applyTheme = (theme) => {
@@ -104,82 +93,11 @@ const setAddMessage = (text, isError = false) => {
     addMessage.textContent = text;
 };
 
-const createHistory = (meta) => {
-    const points = 120;
-    const seed = hashString(meta.label);
-    let current = meta.min + pseudoRandom(seed) * (meta.max - meta.min);
-    const values = [];
-
-    for (let i = 0; i < points; i += 1) {
-        const drift = (pseudoRandom(seed + i + 100) - 0.5) * (meta.max - meta.min) * 0.08;
-        current += drift;
-        if (current < meta.min) current = meta.min + (meta.min - current) * 0.2;
-        if (current > meta.max) current = meta.max - (current - meta.max) * 0.2;
-        values.push(Number(current.toFixed(2)));
-    }
-    return values;
-};
-
-const economicIndicators = indicatorMeta.map((meta) => {
-    const history = createHistory(meta);
-    return {
-        ...meta,
-        history,
-        value: history[history.length - 1]
-    };
-});
-
-const isRiskTriggered = (indicator) =>
-    indicator.riskOnHigh ? indicator.value >= indicator.threshold : indicator.value <= indicator.threshold;
-
-const createSparkPath = (values, width, height, padding) => {
-    const min = Math.min(...values);
-    const max = Math.max(...values);
-    const range = max - min || 1;
-    const step = (width - padding * 2) / (values.length - 1);
-
-    return values
-        .map((value, index) => {
-            const x = padding + step * index;
-            const y = height - padding - ((value - min) / range) * (height - padding * 2);
-            return `${x.toFixed(2)},${y.toFixed(2)}`;
-        })
-        .join(" ");
-};
-
-const renderRiskIndicators = () => {
-    let triggered = 0;
-    riskGrid.innerHTML = economicIndicators
-        .map((indicator) => {
-            const hit = isRiskTriggered(indicator);
-            if (hit) triggered += 1;
-            return `
-                <article class="risk-card">
-                    <div class="risk-title">${indicator.label}</div>
-                    <div class="risk-value">${indicator.value}${indicator.unit}</div>
-                    <div class="risk-threshold">임계값: ${indicator.threshold}${indicator.unit} | 최근 10년(월별)</div>
-                    <svg class="risk-chart" viewBox="0 0 240 70" preserveAspectRatio="none">
-                        <line x1="0" y1="64" x2="240" y2="64" class="axis"></line>
-                        <polyline points="${createSparkPath(indicator.history, 240, 70, 6)}" class="line"></polyline>
-                    </svg>
-                    <span class="badge ${hit ? "danger" : "good"}">${hit ? "위험 신호" : "정상"}</span>
-                </article>
-            `;
-        })
-        .join("");
-
-    const ratio = `${triggered}/${economicIndicators.length}`;
-    if (triggered >= 6) {
-        riskSummary.className = "badge danger";
-        riskSummary.textContent = `위험 높음 (${ratio})`;
-    } else if (triggered >= 3) {
-        riskSummary.className = "badge warn";
-        riskSummary.textContent = `주의 (${ratio})`;
-    } else {
-        riskSummary.className = "badge good";
-        riskSummary.textContent = `안정 (${ratio})`;
-    }
-};
+const formatPercent = (value) => `${value >= 0 ? "+" : ""}${value.toFixed(2)}%`;
+const formatPrice = (value) => `$${value.toFixed(2)}`;
+const signClass = (value) => (value >= 0 ? "pos" : "neg");
+const pctFrom = (latest, prev) => (prev ? ((latest - prev) / prev) * 100 : null);
+const toStooqSymbol = (ticker) => `${ticker.toLowerCase()}.us`;
 
 const parseCsvHistory = (raw) => {
     const lines = raw
@@ -216,12 +134,8 @@ const computeRsi14 = (closes) => {
     return 100 - 100 / (1 + rs);
 };
 
-const pctFrom = (latest, prev) => (prev ? ((latest - prev) / prev) * 100 : null);
-
-const mapTickerForStooq = (ticker) => `${ticker.toLowerCase()}.us`;
-
 const fetchCsvByTicker = async (ticker) => {
-    const symbol = mapTickerForStooq(ticker);
+    const symbol = toStooqSymbol(ticker);
     const urls = [
         `https://r.jina.ai/http://stooq.com/q/d/l/?s=${symbol}&i=d`,
         `https://stooq.com/q/d/l/?s=${symbol}&i=d`
@@ -230,21 +144,67 @@ const fetchCsvByTicker = async (ticker) => {
     for (const url of urls) {
         try {
             const res = await fetch(url);
-            if (res.ok) {
-                return res.text();
-            }
+            if (res.ok) return res.text();
         } catch {
-            // Try next source.
+            // try next
         }
     }
-
     throw new Error("데이터 조회 실패");
 };
 
-const buildRowFromHistory = (ticker, history) => {
-    if (history.length < 220) {
-        throw new Error("히스토리 데이터 부족");
+const getTickerHistory = async (ticker) => {
+    const key = ticker.toUpperCase();
+    if (historyCache.has(key)) return historyCache.get(key);
+    const raw = await fetchCsvByTicker(key);
+    const parsed = parseCsvHistory(raw);
+    historyCache.set(key, parsed);
+    return parsed;
+};
+
+const monthlySeries = (history) => {
+    const out = [];
+    let lastMonth = "";
+    history.forEach((row) => {
+        const month = row.date.slice(0, 7);
+        if (month !== lastMonth) {
+            out.push({ date: row.date, value: row.close });
+            lastMonth = month;
+        } else {
+            out[out.length - 1] = { date: row.date, value: row.close };
+        }
+    });
+    return out.slice(-120);
+};
+
+const mergeSpreadSeries = (aSeries, bSeries) => {
+    const len = Math.min(aSeries.length, bSeries.length);
+    const out = [];
+    for (let i = 0; i < len; i += 1) {
+        const a = aSeries[aSeries.length - len + i];
+        const b = bSeries[bSeries.length - len + i];
+        out.push({
+            date: a.date,
+            value: ((a.value / b.value) - 1) * 100
+        });
     }
+    return out;
+};
+
+const yoySeries = (series) => {
+    const out = [];
+    for (let i = 12; i < series.length; i += 1) {
+        const current = series[i];
+        const prev = series[i - 12];
+        out.push({
+            date: current.date,
+            value: ((current.value / prev.value) - 1) * 100
+        });
+    }
+    return out;
+};
+
+const buildStockRow = (ticker, history) => {
+    if (history.length < 220) throw new Error("히스토리 부족");
 
     const latest = history[history.length - 1];
     const d1 = history[history.length - 2];
@@ -252,49 +212,196 @@ const buildRowFromHistory = (ticker, history) => {
     const d50 = history[history.length - 51];
     const d200 = history[history.length - 201];
     const closes = history.map((item) => item.close);
-    const rsi = computeRsi14(closes);
+    const rsi = computeRsi14(closes) ?? 50;
     const recommendedRsi = 30;
-    const entrySignal = rsi !== null && rsi <= recommendedRsi;
 
     latestBaseDate = latestBaseDate && latestBaseDate > latest.date ? latestBaseDate : latest.date;
 
     return {
         ticker,
         name: knownStocks[ticker] || `${ticker} Corp.`,
-        currentPrice: latest.close, // 기준값: 전날 종가
+        currentPrice: latest.close,
         volume: latest.volume,
-        rsi: rsi ?? 50,
+        rsi,
         recommendedRsi,
-        entryDays: entrySignal ? 1 : null,
+        entryDays: rsi <= recommendedRsi ? 1 : null,
         day1: pctFrom(latest.close, d1.close) ?? 0,
         day20: pctFrom(latest.close, d20.close) ?? 0,
         day50: pctFrom(latest.close, d50.close) ?? 0,
         day200: pctFrom(latest.close, d200.close) ?? 0,
-        history3m: history.slice(-63)
+        history3m: history.slice(-63).map((d) => ({ date: d.date, value: d.close }))
     };
 };
 
-const fetchRealStockRow = async (ticker) => {
-    const upper = ticker.toUpperCase();
-    const raw = await fetchCsvByTicker(upper);
-    const history = parseCsvHistory(raw);
-    return buildRowFromHistory(upper, history);
+const buildIndicatorRows = async () => {
+    const rows = [];
+    for (const def of indicatorDefs) {
+        if (def.mode === "single") {
+            const history = await getTickerHistory(def.ticker);
+            const series = monthlySeries(history);
+            const latest = series[series.length - 1];
+            rows.push({ ...def, series, value: latest.value, date: latest.date });
+            latestBaseDate = latestBaseDate && latestBaseDate > latest.date ? latestBaseDate : latest.date;
+        } else if (def.mode === "spread") {
+            const a = monthlySeries(await getTickerHistory(def.a));
+            const b = monthlySeries(await getTickerHistory(def.b));
+            const series = mergeSpreadSeries(a, b);
+            const latest = series[series.length - 1];
+            rows.push({ ...def, series, value: latest.value, date: latest.date });
+            latestBaseDate = latestBaseDate && latestBaseDate > latest.date ? latestBaseDate : latest.date;
+        } else if (def.mode === "yoy") {
+            const base = monthlySeries(await getTickerHistory(def.ticker));
+            const series = yoySeries(base);
+            const latest = series[series.length - 1];
+            rows.push({ ...def, series, value: latest.value, date: latest.date });
+            latestBaseDate = latestBaseDate && latestBaseDate > latest.date ? latestBaseDate : latest.date;
+        }
+    }
+    return rows;
 };
 
-const filterRows = () => {
+const isRiskTriggered = (indicator) =>
+    indicator.riskOnHigh ? indicator.value >= indicator.threshold : indicator.value <= indicator.threshold;
+
+const renderLineChart = (svg, tipEl, points, formatY) => {
+    while (svg.firstChild) svg.removeChild(svg.firstChild);
+    if (!points || points.length < 2) return;
+
+    const width = Number(svg.getAttribute("viewBox").split(" ")[2]);
+    const height = Number(svg.getAttribute("viewBox").split(" ")[3]);
+    const padLeft = 56;
+    const padRight = 14;
+    const padTop = 16;
+    const padBottom = 28;
+    const min = Math.min(...points.map((p) => p.value));
+    const max = Math.max(...points.map((p) => p.value));
+    const range = max - min || 1;
+    const innerW = width - padLeft - padRight;
+    const innerH = height - padTop - padBottom;
+
+    const xAt = (idx) => padLeft + (innerW * idx) / (points.length - 1);
+    const yAt = (val) => padTop + innerH - ((val - min) / range) * innerH;
+
+    const addLine = (x1, y1, x2, y2, cls) => {
+        const line = document.createElementNS("http://www.w3.org/2000/svg", "line");
+        line.setAttribute("x1", String(x1));
+        line.setAttribute("y1", String(y1));
+        line.setAttribute("x2", String(x2));
+        line.setAttribute("y2", String(y2));
+        line.setAttribute("class", cls);
+        svg.appendChild(line);
+        return line;
+    };
+
+    const addText = (x, y, text, anchor = "middle") => {
+        const t = document.createElementNS("http://www.w3.org/2000/svg", "text");
+        t.setAttribute("x", String(x));
+        t.setAttribute("y", String(y));
+        t.setAttribute("class", "axis-text");
+        t.setAttribute("text-anchor", anchor);
+        t.textContent = text;
+        svg.appendChild(t);
+    };
+
+    addLine(padLeft, padTop, padLeft, height - padBottom, "axis-line");
+    addLine(padLeft, height - padBottom, width - padRight, height - padBottom, "axis-line");
+    addText(padLeft, padTop - 4, formatY(max), "start");
+    addText(padLeft, height - padBottom + 14, formatY(min), "start");
+    addText(padLeft, height - 8, points[0].date, "start");
+    addText(width - padRight, height - 8, points[points.length - 1].date, "end");
+
+    const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
+    const d = points
+        .map((p, i) => `${i === 0 ? "M" : "L"} ${xAt(i).toFixed(2)} ${yAt(p.value).toFixed(2)}`)
+        .join(" ");
+    path.setAttribute("d", d);
+    path.setAttribute("class", "line-path");
+    svg.appendChild(path);
+
+    const cross = addLine(padLeft, padTop, padLeft, height - padBottom, "crosshair");
+
+    const updateTip = (clientX) => {
+        const rect = svg.getBoundingClientRect();
+        const x = Math.min(Math.max(clientX - rect.left, padLeft), width - padRight);
+        const ratio = (x - padLeft) / innerW;
+        const idx = Math.round(ratio * (points.length - 1));
+        const point = points[idx];
+        const px = xAt(idx);
+        cross.setAttribute("x1", String(px));
+        cross.setAttribute("x2", String(px));
+        cross.style.opacity = "1";
+        tipEl.classList.remove("hidden");
+        tipEl.textContent = `${point.date} | ${formatY(point.value)}`;
+    };
+
+    const hideTip = () => {
+        cross.style.opacity = "0";
+        tipEl.classList.add("hidden");
+    };
+
+    svg.onmousemove = (e) => updateTip(e.clientX);
+    svg.onmouseleave = hideTip;
+    svg.ontouchstart = (e) => {
+        if (e.touches[0]) updateTip(e.touches[0].clientX);
+    };
+    svg.ontouchmove = (e) => {
+        if (e.touches[0]) updateTip(e.touches[0].clientX);
+    };
+    svg.ontouchend = hideTip;
+};
+
+const renderIndicators = () => {
+    let triggered = 0;
+    riskGrid.innerHTML = "";
+
+    indicatorRows.forEach((item, idx) => {
+        const hit = isRiskTriggered(item);
+        if (hit) triggered += 1;
+
+        const card = document.createElement("article");
+        card.className = "risk-card";
+        card.innerHTML = `
+            <div class="risk-title">${item.label}</div>
+            <div class="risk-value">${item.value.toFixed(2)}${item.unit}</div>
+            <div class="risk-threshold">임계값: ${item.threshold}${item.unit}</div>
+            <div class="chart-wrap">
+                <svg class="risk-chart" viewBox="0 0 440 160" preserveAspectRatio="none"></svg>
+                <div class="chart-tip hidden"></div>
+            </div>
+            <span class="badge ${hit ? "danger" : "good"}">${hit ? "위험 신호" : "정상"}</span>
+        `;
+        riskGrid.appendChild(card);
+        const svg = card.querySelector(".risk-chart");
+        const tip = card.querySelector(".chart-tip");
+        renderLineChart(svg, tip, item.series, (v) => `${v.toFixed(2)}${item.unit}`);
+    });
+
+    const ratio = `${triggered}/${indicatorRows.length}`;
+    if (triggered >= 6) {
+        riskSummary.className = "badge danger";
+        riskSummary.textContent = `위험 높음 (${ratio})`;
+    } else if (triggered >= 3) {
+        riskSummary.className = "badge warn";
+        riskSummary.textContent = `주의 (${ratio})`;
+    } else {
+        riskSummary.className = "badge good";
+        riskSummary.textContent = `안정 (${ratio})`;
+    }
+};
+
+const filterStockRows = () => {
     const q = tableSearch.value.trim().toUpperCase();
     const onlyEntry = entryOnly.checked;
-    return screeningRows.filter((row) => {
+    return stockRows.filter((row) => {
         const matches = row.ticker.includes(q) || row.name.toUpperCase().includes(q);
         const entryMatches = onlyEntry ? row.rsi <= row.recommendedRsi : true;
         return matches && entryMatches;
     });
 };
 
-const renderRows = () => {
-    const rows = filterRows();
+const renderStocks = () => {
+    const rows = filterStockRows();
     rowCount.textContent = `${rows.length} 종목`;
-
     screeningBody.innerHTML = rows
         .map((row) => {
             const isEntry = row.rsi <= row.recommendedRsi;
@@ -312,96 +419,32 @@ const renderRows = () => {
                     <td data-label="20D%" class="${signClass(row.day20)}">${formatPercent(row.day20)}</td>
                     <td data-label="50D%" class="${signClass(row.day50)}">${formatPercent(row.day50)}</td>
                     <td data-label="200D%" class="${signClass(row.day200)}">${formatPercent(row.day200)}</td>
-                    <td data-label="관리">
-                        <button class="table-remove-btn" data-remove="${row.ticker}" ${removing ? "disabled" : ""}>삭제</button>
-                    </td>
+                    <td data-label="관리"><button class="table-remove-btn" data-remove="${row.ticker}" ${removing ? "disabled" : ""}>삭제</button></td>
                 </tr>
             `;
         })
         .join("");
-
     updateSubtitle();
 };
 
-const removeTicker = (ticker) => {
-    screeningRows = screeningRows.filter((row) => row.ticker !== ticker);
-    renderRows();
-    saveSettings();
-};
-
-const clearChartSvg = () => {
-    while (dailyChartSvg.firstChild) {
-        dailyChartSvg.removeChild(dailyChartSvg.firstChild);
-    }
-};
-
-const drawDailyChart = (row) => {
-    clearChartSvg();
-    const candles = row.history3m || [];
-    if (!candles.length) {
-        chartModalSubtitle.textContent = "차트 데이터 없음";
-        return;
-    }
-
-    const width = 860;
-    const height = 360;
-    const padX = 40;
-    const padY = 24;
-    const lows = candles.map((c) => c.low);
-    const highs = candles.map((c) => c.high);
-    const min = Math.min(...lows);
-    const max = Math.max(...highs);
-    const range = max - min || 1;
-    const step = (width - padX * 2) / candles.length;
-
-    const yScale = (price) => height - padY - ((price - min) / range) * (height - padY * 2);
-
-    for (let i = 0; i < 4; i += 1) {
-        const y = padY + ((height - padY * 2) / 3) * i;
-        const grid = document.createElementNS("http://www.w3.org/2000/svg", "line");
-        grid.setAttribute("x1", String(padX));
-        grid.setAttribute("x2", String(width - padX));
-        grid.setAttribute("y1", String(y));
-        grid.setAttribute("y2", String(y));
-        grid.setAttribute("class", "grid");
-        dailyChartSvg.appendChild(grid);
-    }
-
-    candles.forEach((candle, idx) => {
-        const x = padX + step * idx + step * 0.5;
-        const up = candle.close >= candle.open;
-        const line = document.createElementNS("http://www.w3.org/2000/svg", "line");
-        line.setAttribute("x1", String(x));
-        line.setAttribute("x2", String(x));
-        line.setAttribute("y1", String(yScale(candle.high)));
-        line.setAttribute("y2", String(yScale(candle.low)));
-        line.setAttribute("class", up ? "candle-up" : "candle-down");
-        line.setAttribute("stroke-opacity", "0.55");
-        dailyChartSvg.appendChild(line);
-
-        const body = document.createElementNS("http://www.w3.org/2000/svg", "line");
-        body.setAttribute("x1", String(x));
-        body.setAttribute("x2", String(x));
-        body.setAttribute("y1", String(yScale(candle.open)));
-        body.setAttribute("y2", String(yScale(candle.close)));
-        body.setAttribute("class", up ? "candle-up" : "candle-down");
-        body.setAttribute("stroke-width", "4");
-        dailyChartSvg.appendChild(body);
-    });
-
-    chartModalSubtitle.textContent = `${candles[0].date} ~ ${candles[candles.length - 1].date} | 최근 3개월 일봉`;
-};
-
-const openChartModal = (ticker) => {
-    const row = screeningRows.find((item) => item.ticker === ticker);
+const openStockChartModal = (ticker) => {
+    const row = stockRows.find((item) => item.ticker === ticker);
     if (!row) return;
-    chartModalTitle.textContent = `${ticker} 최근 3개월 일봉 차트`;
-    drawDailyChart(row);
+    chartModalTitle.textContent = `${ticker} 최근 3개월 일봉`;
+    chartModalSubtitle.textContent = "마우스 오버(PC) / 터치(모바일)로 날짜별 값을 확인하세요.";
+    dailyChartTip.classList.add("hidden");
+    renderLineChart(dailyChartSvg, dailyChartTip, row.history3m, (v) => `$${v.toFixed(2)}`);
     chartModal.classList.remove("hidden");
 };
 
-const closeChartModal = () => {
-    chartModal.classList.add("hidden");
+const closeStockChartModal = () => chartModal.classList.add("hidden");
+const openLoginModal = () => loginModal.classList.remove("hidden");
+const closeLoginModal = () => loginModal.classList.add("hidden");
+
+const removeTicker = (ticker) => {
+    stockRows = stockRows.filter((row) => row.ticker !== ticker);
+    renderStocks();
+    saveSettings();
 };
 
 const addTicker = async () => {
@@ -410,59 +453,58 @@ const addTicker = async () => {
         setAddMessage("티커는 영문 1~6자로 입력하세요.", true);
         return;
     }
-    if (screeningRows.some((row) => row.ticker === symbol)) {
+    if (stockRows.some((row) => row.ticker === symbol)) {
         setAddMessage(`${symbol}은 이미 추가되어 있습니다.`, true);
         return;
     }
-    if (loadingTickers.has(symbol)) return;
 
     loadingTickers.add(symbol);
-    setAddMessage(`${symbol} 실데이터 조회 중...`);
-    renderRows();
+    setAddMessage(`${symbol} 전일 종가 데이터 조회 중...`);
+    renderStocks();
+
     try {
-        const row = await fetchRealStockRow(symbol);
-        screeningRows.push(row);
+        const history = await getTickerHistory(symbol);
+        stockRows.push(buildStockRow(symbol, history));
         tickerInput.value = "";
-        setAddMessage(`${symbol} 추가 완료 (기준: 전날 종가).`);
+        setAddMessage(`${symbol} 추가 완료`);
         saveSettings();
-    } catch (error) {
-        setAddMessage(`${symbol} 조회 실패: 티커 확인 또는 데이터 소스 제한`, true);
+    } catch {
+        setAddMessage(`${symbol} 조회 실패`, true);
     } finally {
         loadingTickers.delete(symbol);
-        renderRows();
+        renderStocks();
     }
 };
 
-const initializeDefaultStocks = async (tickers) => {
+const loadStocksByTickers = async (tickers) => {
     loadingTickers = new Set(tickers);
-    renderRows();
+    renderStocks();
 
     const results = await Promise.all(
         tickers.map(async (ticker) => {
             try {
-                return await fetchRealStockRow(ticker);
+                return buildStockRow(ticker, await getTickerHistory(ticker));
             } catch {
                 return null;
             }
         })
     );
-
-    screeningRows = results.filter(Boolean);
+    stockRows = results.filter(Boolean);
     loadingTickers = new Set();
-    renderRows();
+    renderStocks();
 };
 
 const loadUserContext = async () => {
     const settings = loadSettings();
-    if (settings?.theme) {
-        applyTheme(settings.theme);
-    }
-    if (settings?.entryOnly) {
-        entryOnly.checked = true;
-    }
+    if (settings?.theme) applyTheme(settings.theme);
+    if (settings?.entryOnly) entryOnly.checked = true;
+
+    latestBaseDate = null;
+    indicatorRows = await buildIndicatorRows();
+    renderIndicators();
 
     const tickers = settings?.tickers?.length ? settings.tickers : defaultTickers;
-    await initializeDefaultStocks(tickers);
+    await loadStocksByTickers(tickers);
 };
 
 const setupAuth = async () => {
@@ -474,23 +516,17 @@ const setupAuth = async () => {
     }
 
     try {
-        const [{ initializeApp }, { getAuth, GoogleAuthProvider, OAuthProvider, signInWithPopup, signOut, onAuthStateChanged }] =
-            await Promise.all([
-                import("https://www.gstatic.com/firebasejs/10.12.4/firebase-app.js"),
-                import("https://www.gstatic.com/firebasejs/10.12.4/firebase-auth.js")
-            ]);
-
+        const [{ initializeApp }, { getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged }] = await Promise.all([
+            import("https://www.gstatic.com/firebasejs/10.12.4/firebase-app.js"),
+            import("https://www.gstatic.com/firebasejs/10.12.4/firebase-auth.js")
+        ]);
         const app = initializeApp(config);
         const auth = getAuth(app);
-        authApi = { auth, GoogleAuthProvider, OAuthProvider, signInWithPopup, signOut };
+        authApi = { auth, GoogleAuthProvider, signInWithPopup, signOut };
 
         onAuthStateChanged(auth, async (user) => {
             currentUser = user || null;
-            if (currentUser) {
-                authStatus.textContent = `로그인됨: ${currentUser.email || currentUser.uid}`;
-            } else {
-                authStatus.textContent = "로그인 안됨 (게스트 모드)";
-            }
+            authStatus.textContent = currentUser ? `로그인됨: ${currentUser.email || currentUser.uid}` : "로그인 안됨 (게스트 모드)";
             await loadUserContext();
         });
     } catch {
@@ -499,18 +535,18 @@ const setupAuth = async () => {
     }
 };
 
-screeningBody.addEventListener("click", (event) => {
-    const button = event.target.closest("[data-remove]");
-    if (button) {
-        const ticker = button.getAttribute("data-remove");
-        removeTicker(ticker);
-        return;
+menuToggleBtn.addEventListener("click", () => sideMenu.classList.toggle("hidden"));
+document.addEventListener("click", (event) => {
+    if (!sideMenu.classList.contains("hidden")) {
+        if (!event.target.closest("#side-menu") && !event.target.closest("#menu-toggle-btn")) {
+            sideMenu.classList.add("hidden");
+        }
     }
+});
 
-    const rowElement = event.target.closest("[data-ticker-row]");
-    if (!rowElement) return;
-    const ticker = rowElement.getAttribute("data-ticker-row");
-    openChartModal(ticker);
+themeToggleBtn.addEventListener("click", () => {
+    const current = document.documentElement.dataset.theme || "dark";
+    applyTheme(current === "dark" ? "light" : "dark");
 });
 
 addTickerBtn.addEventListener("click", addTicker);
@@ -520,16 +556,33 @@ tickerInput.addEventListener("keydown", (event) => {
         addTicker();
     }
 });
-
 entryOnly.addEventListener("change", () => {
-    renderRows();
+    renderStocks();
     saveSettings();
 });
-tableSearch.addEventListener("input", renderRows);
+tableSearch.addEventListener("input", renderStocks);
 
-themeToggleBtn.addEventListener("click", () => {
-    const current = document.documentElement.dataset.theme || "dark";
-    applyTheme(current === "dark" ? "light" : "dark");
+screeningBody.addEventListener("click", (event) => {
+    const removeBtn = event.target.closest("[data-remove]");
+    if (removeBtn) {
+        removeTicker(removeBtn.getAttribute("data-remove"));
+        return;
+    }
+    const rowEl = event.target.closest("[data-ticker-row]");
+    if (rowEl) {
+        openStockChartModal(rowEl.getAttribute("data-ticker-row"));
+    }
+});
+
+chartModalClose.addEventListener("click", closeStockChartModal);
+chartModal.addEventListener("click", (event) => {
+    if (event.target.matches("[data-close-modal='true']")) closeStockChartModal();
+});
+
+loginOpenBtn.addEventListener("click", openLoginModal);
+loginModalClose.addEventListener("click", closeLoginModal);
+loginModal.addEventListener("click", (event) => {
+    if (event.target.matches("[data-close-login='true']")) closeLoginModal();
 });
 
 googleLoginBtn.addEventListener("click", async () => {
@@ -539,21 +592,9 @@ googleLoginBtn.addEventListener("click", async () => {
     }
     try {
         await authApi.signInWithPopup(authApi.auth, new authApi.GoogleAuthProvider());
+        closeLoginModal();
     } catch {
         authStatus.textContent = "Google 로그인 실패";
-    }
-});
-
-appleLoginBtn.addEventListener("click", async () => {
-    if (!authApi) {
-        authStatus.textContent = "Firebase 설정이 없어 Apple 로그인 불가";
-        return;
-    }
-    try {
-        const provider = new authApi.OAuthProvider("apple.com");
-        await authApi.signInWithPopup(authApi.auth, provider);
-    } catch {
-        authStatus.textContent = "Apple 로그인 실패 (Firebase Apple 설정 필요)";
     }
 });
 
@@ -562,13 +603,5 @@ logoutBtn.addEventListener("click", async () => {
     await authApi.signOut(authApi.auth);
 });
 
-chartModalClose.addEventListener("click", closeChartModal);
-chartModal.addEventListener("click", (event) => {
-    if (event.target.matches("[data-close-modal='true']")) {
-        closeChartModal();
-    }
-});
-
 applyTheme("dark");
-renderRiskIndicators();
 setupAuth();

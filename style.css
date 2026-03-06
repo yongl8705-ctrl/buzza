@@ -8,7 +8,6 @@
     --blue: #47a2ff;
     --green: #3bc779;
     --red: #ff6f6f;
-    --amber: #f5c55f;
 }
 
 [data-theme="light"] {
@@ -21,7 +20,6 @@
     --blue: #2e7ed8;
     --green: #2c9f62;
     --red: #d85757;
-    --amber: #bf9234;
 }
 
 * {
@@ -33,13 +31,69 @@ body {
     font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
     color: var(--text);
     background:
-        radial-gradient(900px 300px at 30% -80px, #173051 0%, transparent 70%),
+        radial-gradient(900px 320px at 30% -80px, #173051 0%, transparent 70%),
         var(--bg);
+}
+
+.topbar {
+    position: sticky;
+    top: 0;
+    z-index: 30;
+    height: 54px;
+    padding: 8px 12px;
+    display: grid;
+    grid-template-columns: auto 1fr auto;
+    gap: 10px;
+    align-items: center;
+    background: color-mix(in srgb, var(--bg-soft) 88%, #10243d 12%);
+    border-bottom: 1px solid var(--line);
+}
+
+.top-title {
+    text-align: center;
+    font-weight: 700;
+}
+
+.icon-btn {
+    border: 1px solid var(--line);
+    background: var(--card);
+    color: var(--text);
+    border-radius: 8px;
+    width: 38px;
+    height: 38px;
+    cursor: pointer;
+}
+
+.side-menu {
+    position: fixed;
+    top: 58px;
+    left: 12px;
+    width: 190px;
+    z-index: 35;
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    background: var(--bg-soft);
+    padding: 8px;
+    display: grid;
+    gap: 6px;
+}
+
+.side-menu.hidden {
+    display: none;
+}
+
+.side-menu a {
+    text-decoration: none;
+    color: var(--text);
+    font-size: 0.92rem;
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    padding: 8px 10px;
 }
 
 .page {
     min-height: 100vh;
-    padding: 22px 12px 40px;
+    padding: 14px 12px 40px;
 }
 
 .container {
@@ -50,24 +104,16 @@ body {
 }
 
 .hero {
-    padding: 8px 2px 4px;
-}
-
-.hero-row {
     display: flex;
     justify-content: space-between;
     align-items: center;
     gap: 12px;
 }
 
-h1 {
-    margin: 0;
-    font-size: 1.9rem;
-}
-
 .subtitle {
-    margin: 8px 0 0;
+    margin: 0;
     color: var(--muted);
+    font-size: 0.93rem;
 }
 
 .theme-btn {
@@ -105,11 +151,12 @@ h2 {
     gap: 8px;
     grid-template-columns: 180px 1fr;
     align-items: center;
+    margin-bottom: 12px;
 }
 
 label {
     color: var(--muted);
-    font-size: 0.92rem;
+    font-size: 0.9rem;
 }
 
 #ticker-input,
@@ -120,6 +167,11 @@ label {
     background: #0a1628;
     color: var(--text);
     padding: 0 12px;
+}
+
+[data-theme="light"] #ticker-input,
+[data-theme="light"] #table-search {
+    background: #f5f8ff;
 }
 
 .add-wrap {
@@ -138,62 +190,12 @@ label {
     cursor: pointer;
 }
 
-.table-remove-btn {
-    border: 1px solid #7e3540;
-    background: #55242b;
-    color: #ffd4d4;
-    border-radius: 7px;
-    padding: 4px 9px;
-    font-size: 0.8rem;
-    cursor: pointer;
-}
-
-[data-theme="light"] .table-remove-btn {
-    background: #fff1f1;
-    color: #9e3f3f;
-    border-color: #dfa0a0;
-}
-
 .add-message {
     margin: 0;
     min-height: 20px;
     grid-column: 2;
     font-size: 0.84rem;
     color: var(--muted);
-}
-
-.auth-wrap {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 8px;
-    align-items: center;
-}
-
-.auth-wrap button {
-    border: 1px solid var(--line);
-    background: #14263d;
-    color: #dde8f8;
-    border-radius: 8px;
-    height: 34px;
-    padding: 0 12px;
-    cursor: pointer;
-}
-
-[data-theme="light"] .auth-wrap button {
-    background: #edf3fb;
-    color: #1f2d40;
-}
-
-.auth-status {
-    margin: 0;
-    color: var(--muted);
-    font-size: 0.9rem;
-}
-
-.content-panel p {
-    margin: 10px 0 0;
-    color: var(--muted);
-    line-height: 1.65;
 }
 
 .checkbox-wrap {
@@ -206,7 +208,7 @@ label {
 .risk-grid {
     display: grid;
     gap: 10px;
-    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    grid-template-columns: repeat(3, minmax(0, 1fr));
 }
 
 .risk-card {
@@ -215,24 +217,7 @@ label {
     background: rgba(6, 13, 24, 0.56);
     padding: 10px;
     display: grid;
-    gap: 6px;
-}
-
-.risk-chart {
-    width: 100%;
-    height: 64px;
-    display: block;
-}
-
-.risk-chart .line {
-    fill: none;
-    stroke: var(--blue);
-    stroke-width: 2;
-}
-
-.risk-chart .axis {
-    stroke: #385274;
-    stroke-width: 1;
+    gap: 7px;
 }
 
 .risk-title {
@@ -241,13 +226,68 @@ label {
 }
 
 .risk-value {
-    font-size: 1.05rem;
+    font-size: 1.02rem;
     font-weight: 700;
 }
 
-.risk-threshold {
-    font-size: 0.8rem;
-    color: var(--muted);
+.chart-wrap {
+    position: relative;
+}
+
+.chart-tip {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    z-index: 2;
+    border: 1px solid var(--line);
+    background: color-mix(in srgb, var(--bg-soft) 84%, #0d1a2d 16%);
+    color: var(--text);
+    border-radius: 7px;
+    font-size: 0.78rem;
+    padding: 4px 6px;
+}
+
+.chart-tip.hidden {
+    display: none;
+}
+
+.risk-chart,
+.daily-chart {
+    width: 100%;
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    background: color-mix(in srgb, var(--bg-soft) 86%, #0f1b2f 14%);
+}
+
+.risk-chart {
+    height: 150px;
+}
+
+.daily-chart {
+    height: 340px;
+}
+
+.axis-line {
+    stroke: #3a5072;
+    stroke-width: 1;
+}
+
+.line-path {
+    fill: none;
+    stroke: var(--blue);
+    stroke-width: 2;
+}
+
+.axis-text {
+    fill: var(--muted);
+    font-size: 11px;
+}
+
+.crosshair {
+    stroke: #95b8e5;
+    stroke-width: 1;
+    stroke-dasharray: 3 3;
+    opacity: 0;
 }
 
 .badge {
@@ -294,7 +334,7 @@ td {
     padding: 9px 8px;
     text-align: right;
     white-space: nowrap;
-    font-size: 0.9rem;
+    font-size: 0.88rem;
 }
 
 th:nth-child(1),
@@ -308,11 +348,26 @@ th {
     color: var(--muted);
     font-size: 0.78rem;
     font-weight: 600;
-    letter-spacing: 0.03em;
 }
 
 tr:hover td {
     background: rgba(54, 84, 124, 0.14);
+    cursor: pointer;
+}
+
+.table-remove-btn {
+    border: 1px solid #7e3540;
+    background: #55242b;
+    color: #ffd4d4;
+    border-radius: 7px;
+    padding: 4px 9px;
+    font-size: 0.8rem;
+    cursor: pointer;
+}
+
+.table-remove-btn:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
 }
 
 .pos {
@@ -350,13 +405,17 @@ tr:hover td {
 
 .modal-card {
     position: relative;
-    width: min(940px, 95vw);
+    width: min(980px, 95vw);
     max-height: 88vh;
     overflow: auto;
     border: 1px solid var(--line);
     border-radius: 12px;
     background: var(--bg-soft);
     padding: 14px;
+}
+
+.login-card {
+    width: min(460px, 92vw);
 }
 
 .modal-head {
@@ -386,38 +445,36 @@ tr:hover td {
     font-size: 0.9rem;
 }
 
-.daily-chart {
-    width: 100%;
-    height: 340px;
+.auth-wrap {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+.auth-wrap button {
     border: 1px solid var(--line);
+    background: #14263d;
+    color: #dde8f8;
     border-radius: 8px;
-    background: color-mix(in srgb, var(--bg-soft) 85%, #0f1b2f 15%);
+    height: 34px;
+    padding: 0 12px;
+    cursor: pointer;
 }
 
-.daily-chart .grid {
-    stroke: #3a5072;
-    stroke-width: 1;
-    opacity: 0.6;
-}
-
-.daily-chart .candle-up {
-    stroke: #34be76;
-    stroke-width: 2;
-}
-
-.daily-chart .candle-down {
-    stroke: #f07070;
-    stroke-width: 2;
+.content-panel p {
+    margin: 10px 0 0;
+    color: var(--muted);
+    line-height: 1.65;
 }
 
 @media (max-width: 760px) {
-    h1 {
-        font-size: 1.5rem;
-    }
-
-    .hero-row {
+    .hero {
         flex-direction: column;
         align-items: flex-start;
+    }
+
+    .risk-grid {
+        grid-template-columns: 1fr;
     }
 
     .filters {
@@ -446,7 +503,6 @@ tr:hover td {
         border-radius: 10px;
         margin-bottom: 10px;
         padding: 8px;
-        background: rgba(20, 36, 58, 0.6);
     }
 
     td {
@@ -454,10 +510,6 @@ tr:hover td {
         text-align: right;
         padding: 7px 4px;
         white-space: normal;
-    }
-
-    td:last-child {
-        border-bottom: 0;
     }
 
     td::before {
@@ -468,9 +520,8 @@ tr:hover td {
         margin-right: 8px;
     }
 
-    .table-remove-btn {
-        width: 100%;
-        height: 32px;
+    .risk-chart {
+        height: 190px;
     }
 
     .daily-chart {

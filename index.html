@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="ko">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -7,21 +7,36 @@
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
+    <header class="topbar">
+        <button id="menu-toggle-btn" class="icon-btn" aria-label="메뉴 열기">☰</button>
+        <div class="top-title">Stock Dashboard</div>
+        <button id="login-open-btn" class="icon-btn" aria-label="로그인 열기">👤</button>
+    </header>
+
+    <aside id="side-menu" class="side-menu hidden">
+        <a href="index.html">대시보드</a>
+        <a href="guide.html">지표 설명</a>
+    </aside>
+
     <main class="page">
         <section class="container">
             <header class="hero">
-                <h1>Stock Dashboard</h1>
-                <div class="hero-row">
-                    <p id="subtitle-text" class="subtitle">
-                        기준일: 로딩 중
-                    </p>
-                    <button id="theme-toggle-btn" type="button" class="theme-btn">Light Mode</button>
-                </div>
+                <p id="subtitle-text" class="subtitle">기준일: 로딩 중</p>
+                <button id="theme-toggle-btn" type="button" class="theme-btn">Light Mode</button>
             </header>
 
             <section class="panel">
                 <div class="panel-head">
+                    <h2>Economic Risk Indicators</h2>
+                    <span id="risk-summary" class="badge neutral">Loading</span>
+                </div>
+                <div id="risk-grid" class="risk-grid"></div>
+            </section>
+
+            <section class="panel">
+                <div class="panel-head">
                     <h2>Stocks</h2>
+                    <span id="row-count" class="badge neutral">0 종목</span>
                 </div>
                 <div class="filters">
                     <label for="ticker-input">Ticker Add</label>
@@ -36,33 +51,6 @@
                         <input id="entry-only" type="checkbox">
                         <span>추천 RSI 이하 종목만 보기</span>
                     </label>
-                </div>
-            </section>
-
-            <section class="panel">
-                <div class="panel-head">
-                    <h2>Login & Save</h2>
-                </div>
-                <div class="auth-wrap">
-                    <button id="google-login-btn" type="button">Google 로그인</button>
-                    <button id="apple-login-btn" type="button">Apple 로그인</button>
-                    <button id="logout-btn" type="button">로그아웃</button>
-                    <p id="auth-status" class="auth-status">로그인 안됨 (게스트 모드)</p>
-                </div>
-            </section>
-
-            <section class="panel">
-                <div class="panel-head">
-                    <h2>Economic Risk Indicators</h2>
-                    <span id="risk-summary" class="badge neutral">Loading</span>
-                </div>
-                <div id="risk-grid" class="risk-grid"></div>
-            </section>
-
-            <section class="panel">
-                <div class="panel-head">
-                    <h2>종목 전체 보기</h2>
-                    <span id="row-count" class="badge neutral">0 종목</span>
                 </div>
                 <div class="table-wrap">
                     <table>
@@ -86,28 +74,6 @@
                     </table>
                 </div>
             </section>
-
-            <section class="panel content-panel">
-                <h2>서비스 소개</h2>
-                <p>
-                    이 서비스는 미국 주식과 ETF의 핵심 지표를 한눈에 확인하고, 종목별 최근 3개월 일봉 흐름을 빠르게 점검할 수 있도록 구성되었습니다.
-                    투자 판단의 책임은 사용자 본인에게 있으며, 본 페이지의 정보는 투자 권유가 아닙니다.
-                </p>
-                <p>
-                    데이터는 외부 시세 소스를 통해 조회되며 시장 마감/공휴일/공급자 정책에 따라 지연될 수 있습니다.
-                    기준값은 전날 종가를 기준으로 계산합니다.
-                </p>
-            </section>
-
-            <section class="panel content-panel">
-                <h2>개인정보 처리 및 문의</h2>
-                <p>
-                    로그인 기능은 사용자 설정 저장을 위한 선택 기능입니다. 별도 설정(Firebase)이 없는 경우 게스트 모드로 동작하며 브라우저 로컬 저장소만 사용합니다.
-                </p>
-                <p>
-                    문의: support@example.com
-                </p>
-            </section>
         </section>
     </main>
 
@@ -119,7 +85,24 @@
                 <button id="chart-modal-close" type="button" class="modal-close-btn">닫기</button>
             </div>
             <p id="chart-modal-subtitle" class="modal-subtitle"></p>
-            <svg id="daily-chart-svg" class="daily-chart" viewBox="0 0 860 360" preserveAspectRatio="none"></svg>
+            <svg id="daily-chart-svg" class="daily-chart" viewBox="0 0 920 360" preserveAspectRatio="none"></svg>
+            <div id="daily-chart-tip" class="chart-tip hidden"></div>
+        </div>
+    </div>
+
+    <div id="login-modal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="login-modal-title">
+        <div class="modal-backdrop" data-close-login="true"></div>
+        <div class="modal-card login-card">
+            <div class="modal-head">
+                <h3 id="login-modal-title">로그인 및 설정 저장</h3>
+                <button id="login-modal-close" type="button" class="modal-close-btn">닫기</button>
+            </div>
+            <p id="auth-status" class="modal-subtitle">로그인 안됨 (게스트 모드)</p>
+            <p class="modal-subtitle">구글로 로그인하면 현재 테마/티커/필터 설정을 저장할 수 있습니다.</p>
+            <div class="auth-wrap">
+                <button id="google-login-btn" type="button">Google로 계속하기</button>
+                <button id="logout-btn" type="button">로그아웃</button>
+            </div>
         </div>
     </div>
 
