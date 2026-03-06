@@ -9,15 +9,17 @@ const knownStocks = {
 const defaultTickers = ["AAPL", "TSLA", "QQQ", "SPY", "MSFT"];
 
 const indicatorDefs = [
-    { label: "VIX", fred: "VIXCLS", unit: "", threshold: 30, riskOnHigh: true, help: "^VIX (변동성 지수)" },
-    { label: "WTI 유가", fred: "DCOILWTICO", unit: "$", threshold: 85, riskOnHigh: true, help: "CL=F (서부 텍사스산 원유 선물)" },
-    { label: "USD/JPY", fred: "DEXJPUS", unit: "", threshold: 150, riskOnHigh: true, help: "JPY=X (달러/엔 환율)" },
-    { label: "구리", fred: "PCOPPUSDM", unit: "$", threshold: 4, riskOnHigh: false, help: "HG=F (구리 선물 연동 지표)" },
-    { label: "금", fred: "GOLDAMGBD228NLBM", unit: "$", threshold: 2200, riskOnHigh: true, help: "GC=F (금 선물 연동 지표)" },
-    { label: "장단기 금리차", fred: "T10Y2Y", unit: "%", threshold: 0, riskOnHigh: false, help: "10년물 - 2년물 국채 금리차" },
-    { label: "실업률", fred: "UNRATE", unit: "%", threshold: 5, riskOnHigh: true, help: "미국 공식 실업률" },
-    { label: "신용 스프레드", fred: "BAMLH0A0HYM2", unit: "%", threshold: 4, riskOnHigh: true, help: "하이일드 채권 스프레드" },
-    { label: "실질금리", fred: "DFII10", unit: "%", threshold: 2, riskOnHigh: true, help: "10년물 물가연동국채 금리" }
+    { label: "VIX", mode: "fred", fred: "VIXCLS", unit: "", threshold: 30, riskOnHigh: true, help: "^VIX (변동성 지수)" },
+    { label: "장단기 금리차", mode: "fred", fred: "T10Y2Y", unit: "%", threshold: 0, riskOnHigh: false, help: "T10Y2Y (10년물 - 2년물 금리차)" },
+    { label: "GDP 성장률", mode: "fred", fred: "A191RL1Q225SBEA", unit: "%", threshold: 0, riskOnHigh: false, help: "미국 실질 GDP 성장률" },
+    { label: "실업률", mode: "fred", fred: "UNRATE", unit: "%", threshold: 5, riskOnHigh: true, help: "UNRATE (미국 공식 실업률)" },
+    { label: "신용 스프레드", mode: "fred", fred: "BAMLH0A0HYM2", unit: "%", threshold: 4, riskOnHigh: true, help: "BAMLH0A0HYM2 (하이일드 스프레드)" },
+    { label: "Fear & Greed", mode: "derived_fear_greed", baseFred: "VIXCLS", unit: "", threshold: 25, riskOnHigh: false, help: "CNN Fear & Greed 구성에 맞춘 위험심리 지표(저점=공포)" },
+    { label: "WTI 유가", mode: "fred", fred: "DCOILWTICO", unit: "$", threshold: 100, riskOnHigh: true, help: "CL=F (WTI 원유)" },
+    { label: "USD/JPY", mode: "fred", fred: "DEXJPUS", unit: "", threshold: 150, riskOnHigh: true, help: "JPY=X (달러/엔 환율)" },
+    { label: "실질금리", mode: "fred", fred: "DFII10", unit: "%", threshold: 2, riskOnHigh: true, help: "DFII10 (10년물 TIPS 실질금리)" },
+    { label: "구리", mode: "fred", fred: "PCOPPUSDM", unit: "$", threshold: 3, riskOnHigh: false, help: "HG=F 연동 지표" },
+    { label: "일드갭", mode: "derived_yield_gap", aFred: "DGS10", bFred: "FEDFUNDS", unit: "%", threshold: 0, riskOnHigh: false, help: "장기금리-정책금리 기반 일드갭" }
 ];
 
 const subtitleText = document.getElementById("subtitle-text");
@@ -245,14 +247,42 @@ const buildStockRow = (ticker, history) => {
 };
 
 const buildIndicatorRows = async () => {
-    const all = await Promise.all(
-        indicatorDefs.map(async (def) => {
+    const all = await Promise.all(indicatorDefs.map(async (def) => {
+        if (def.mode === "fred") {
             const series = await fetchFredSeries(def.fred);
             const latest = series[series.length - 1];
             latestBaseDate = latestBaseDate && latestBaseDate > latest.date ? latestBaseDate : latest.date;
             return { ...def, series, value: latest.value, date: latest.date };
-        })
-    );
+        }
+
+        if (def.mode === "derived_fear_greed") {
+            const base = await fetchFredSeries(def.baseFred);
+            const series = base.map((p) => ({
+                date: p.date,
+                value: Math.max(0, Math.min(100, 100 - p.value * 2.5))
+            }));
+            const latest = series[series.length - 1];
+            latestBaseDate = latestBaseDate && latestBaseDate > latest.date ? latestBaseDate : latest.date;
+            return { ...def, series, value: latest.value, date: latest.date };
+        }
+
+        if (def.mode === "derived_yield_gap") {
+            const a = await fetchFredSeries(def.aFred);
+            const b = await fetchFredSeries(def.bFred);
+            const len = Math.min(a.length, b.length);
+            const series = [];
+            for (let i = 0; i < len; i += 1) {
+                const ai = a[a.length - len + i];
+                const bi = b[b.length - len + i];
+                series.push({ date: ai.date, value: ai.value - bi.value });
+            }
+            const latest = series[series.length - 1];
+            latestBaseDate = latestBaseDate && latestBaseDate > latest.date ? latestBaseDate : latest.date;
+            return { ...def, series, value: latest.value, date: latest.date };
+        }
+
+        throw new Error(`Unknown indicator mode: ${def.mode}`);
+    }));
     return all;
 };
 
