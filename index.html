@@ -3,30 +3,70 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Stock Tracker</title>
+    <title>Screening Dashboard</title>
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
     <main class="page">
-        <div class="container">
-            <h1>My Stock Portfolio</h1>
-            <p class="subtitle">Track your watchlist quickly with ticker symbols.</p>
+        <section class="container">
+            <header class="hero">
+                <h1>Stock Screening Dashboard</h1>
+                <p class="subtitle">
+                    Evan Traders screening-style indicators in one view.
+                </p>
+            </header>
 
-            <form id="add-stock-form" class="input-container">
-                <label class="sr-only" for="stock-ticker-input">Stock ticker</label>
-                <input
-                    type="text"
-                    id="stock-ticker-input"
-                    maxlength="8"
-                    autocomplete="off"
-                    placeholder="Enter stock ticker (e.g., AAPL)"
-                >
-                <button id="add-stock-btn" type="submit">Add Stock</button>
-            </form>
+            <section class="panel">
+                <div class="panel-head">
+                    <h2>Filters</h2>
+                </div>
+                <div class="filters">
+                    <label for="ticker-search">Ticker Search</label>
+                    <input id="ticker-search" type="text" placeholder="SOXL, TQQQ, UPRO ...">
+                    <label class="checkbox-wrap" for="entry-only">
+                        <input id="entry-only" type="checkbox">
+                        <span>추천 RSI 이하 종목만 보기</span>
+                    </label>
+                </div>
+            </section>
 
-            <p id="form-message" class="form-message" aria-live="polite"></p>
-            <div id="stock-list" class="stock-list"></div>
-        </div>
+            <section class="panel">
+                <div class="panel-head">
+                    <h2>Economic Risk Indicators</h2>
+                    <span id="risk-summary" class="badge neutral">Loading</span>
+                </div>
+                <div id="risk-grid" class="risk-grid"></div>
+            </section>
+
+            <section class="panel">
+                <div class="panel-head">
+                    <h2>종목 스크리닝 전체 보기</h2>
+                    <span id="row-count" class="badge neutral">0 종목</span>
+                </div>
+                <div class="table-wrap">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>티커</th>
+                                <th>이름</th>
+                                <th>현재가</th>
+                                <th>거래량</th>
+                                <th>RSI</th>
+                                <th>추천 RSI</th>
+                                <th>진입경과</th>
+                                <th>1D%</th>
+                                <th>20D%</th>
+                                <th>50D%</th>
+                                <th>200D%</th>
+                                <th>V2.2 자본</th>
+                                <th>V3.0 자본</th>
+                            </tr>
+                        </thead>
+                        <tbody id="screening-body"></tbody>
+                    </table>
+                </div>
+            </section>
+        </section>
     </main>
     <script src="main.js"></script>
 </body>
